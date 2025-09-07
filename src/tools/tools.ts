@@ -8,6 +8,10 @@ import { getListPulseMetricsFromMetricIdsTool } from './pulse/listMetricsFromMet
 import { getListPulseMetricSubscriptionsTool } from './pulse/listMetricSubscriptions/listPulseMetricSubscriptions.js';
 import { getQueryDatasourceTool } from './queryDatasource/queryDatasource.js';
 import { getReadMetadataTool } from './readMetadata.js';
+import { getSearchContentTool } from './search/searchContent.js';
+import { getManageInstancesTool } from './config/manageInstances.js';
+import { getManageUserImpersonationTool } from './config/manageUserImpersonation.js';
+import { getListTableauInstancesTool } from './config/listTableauInstances.js';
 import { getGetViewDataTool } from './views/getViewData.js';
 import { getGetViewImageTool } from './views/getViewImage.js';
 import { getListViewsTool } from './views/listViews.js';
@@ -15,6 +19,13 @@ import { getGetWorkbookTool } from './workbooks/getWorkbook.js';
 import { getListWorkbooksTool } from './workbooks/listWorkbooks.js';
 
 export const toolFactories = [
+  // Configuration management tools (highest priority)
+  getManageInstancesTool,
+  getManageUserImpersonationTool,
+  getListTableauInstancesTool,
+  // New unified search tool (prioritized)
+  getSearchContentTool,
+  // Legacy individual tools (for backward compatibility)
   getListDatasourcesTool,
   getListFieldsTool,
   getQueryDatasourceTool,

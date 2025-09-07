@@ -1,4 +1,8 @@
 export const toolNames = [
+  'manage-tableau-instances',
+  'manage-user-impersonation',
+  'list-tableau-instances',
+  'search-content',
   'list-datasources',
   'list-fields',
   'list-workbooks',

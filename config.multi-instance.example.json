@@ -1,0 +1,74 @@
+{
+  "description": "Multi-instance Tableau Search MCP Server Configuration Example",
+  "environment_variables": {
+    "TABLEAU_INSTANCES": "JSON array of Tableau instances to search across",
+    "SEARCH_CACHE_TTL": "Cache TTL in milliseconds (default: 300000 = 5 minutes)",
+    "MAX_CONCURRENT_SEARCHES": "Maximum concurrent searches across instances (default: 10)",
+    "SEARCH_TIMEOUT": "Search timeout in milliseconds (default: 30000 = 30 seconds)",
+    "ENABLE_REQUEST_CACHING": "Enable request-level caching (default: true)",
+    "SYSTEM_PROMPT": "Custom system prompt for result prioritization"
+  },
+  "example_configuration": {
+    "TABLEAU_INSTANCES": "[{\"name\":\"production\",\"server\":\"https://tableau.company.com\",\"siteName\":\"\",\"auth\":\"pat\",\"patName\":\"prod-search\",\"patValue\":\"your-pat-token\",\"enabled\":true,\"priority\":10,\"maxConcurrentRequests\":15,\"requestTimeout\":30000},{\"name\":\"staging\",\"server\":\"https://tableau-staging.company.com\",\"siteName\":\"\",\"auth\":\"pat\",\"patName\":\"staging-search\",\"patValue\":\"your-staging-pat-token\",\"enabled\":true,\"priority\":5,\"maxConcurrentRequests\":10,\"requestTimeout\":30000},{\"name\":\"cloud\",\"server\":\"https://prod-ap-southeast-2a.online.tableau.com\",\"siteName\":\"\",\"auth\":\"direct-trust\",\"jwtSubClaim\":\"search-service@company.com\",\"connectedAppClientId\":\"your-client-id\",\"connectedAppSecretId\":\"your-secret-id\",\"connectedAppSecretValue\":\"your-secret-value\",\"jwtAdditionalPayload\":\"{\\\"groups\\\":[\\\"tableau-search-users\\\"]}\",\"enabled\":true,\"priority\":8,\"maxConcurrentRequests\":12,\"requestTimeout\":45000}]",
+    "SEARCH_CACHE_TTL": "300000",
+    "MAX_CONCURRENT_SEARCHES": "15",
+    "SEARCH_TIMEOUT": "45000",
+    "ENABLE_REQUEST_CACHING": "true",
+    "SYSTEM_PROMPT": "Prioritize results based on relevance to the user query, content freshness, and usage popularity. Production instances should be weighted higher than staging instances."
+  },
+  "instance_configuration_schema": {
+    "name": "Unique identifier for the instance (required)",
+    "server": "Tableau server URL (required, must start with https://)",
+    "siteName": "Tableau site name (optional, empty string for default site)",
+    "auth": "Authentication method: 'pat' or 'direct-trust' (required)",
+    "patName": "Personal Access Token name (required for pat auth)",
+    "patValue": "Personal Access Token value (required for pat auth)",
+    "jwtSubClaim": "JWT subject claim (required for direct-trust auth)",
+    "connectedAppClientId": "Connected App Client ID (required for direct-trust auth)",
+    "connectedAppSecretId": "Connected App Secret ID (required for direct-trust auth)",
+    "connectedAppSecretValue": "Connected App Secret Value (required for direct-trust auth)",
+    "jwtAdditionalPayload": "Additional JWT payload as JSON string (optional)",
+    "enabled": "Whether this instance is enabled (default: true)",
+    "priority": "Instance priority 1-10, higher numbers = higher priority (default: 5)",
+    "maxConcurrentRequests": "Max concurrent requests to this instance (default: 10)",
+    "requestTimeout": "Request timeout in milliseconds (default: 30000)"
+  },
+  "common_configuration": {
+    "TRANSPORT": "stdio, http, or docker (default: stdio)",
+    "DEFAULT_LOG_LEVEL": "debug, info, warn, error (default: debug)",
+    "DISABLE_LOG_MASKING": "true or false (default: false)",
+    "INCLUDE_TOOLS": "Comma-separated list of tools to include (optional)",
+    "EXCLUDE_TOOLS": "Comma-separated list of tools to exclude (optional)",
+    "MAX_RESULT_LIMIT": "Maximum results per query (optional)"
+  },
+  "deployment_examples": {
+    "docker": {
+      "description": "Docker deployment with multiple Tableau instances",
+      "dockerfile": "FROM node:18-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci --only=production\nCOPY . .\nRUN npm run build\nEXPOSE 3927\nCMD [\"npm\", \"start\"]",
+      "docker_compose": "version: '3.8'\nservices:\n  tableau-search-mcp:\n    build: .\n    ports:\n      - \"3927:3927\"\n    environment:\n      - TRANSPORT=http\n      - TABLEAU_INSTANCES=${TABLEAU_INSTANCES}\n      - SEARCH_CACHE_TTL=300000\n      - MAX_CONCURRENT_SEARCHES=15\n      - SEARCH_TIMEOUT=45000\n      - ENABLE_REQUEST_CACHING=true\n      - DEFAULT_LOG_LEVEL=info\n    restart: unless-stopped"
+    },
+    "claude_desktop": {
+      "description": "Claude Desktop extension configuration",
+      "claude_desktop_config": "{\n  \"mcpServers\": {\n    \"tableau-search\": {\n      \"command\": \"node\",\n      \"args\": [\"/path/to/tableau-search-mcp/dist/index.js\"],\n      \"env\": {\n        \"TRANSPORT\": \"stdio\",\n        \"TABLEAU_INSTANCES\": \"[{\\\"name\\\":\\\"prod\\\",\\\"server\\\":\\\"https://tableau.company.com\\\",\\\"auth\\\":\\\"pat\\\",\\\"patName\\\":\\\"search\\\",\\\"patValue\\\":\\\"your-token\\\"}]\"\n      }\n    }\n  }\n}"
+    }
+  },
+  "usage_examples": {
+    "basic_search": "Search for all content related to 'sales performance'",
+    "filtered_search": "Search workbooks in Finance project created after 2023-01-01",
+    "detailed_results": "Get detailed metadata for analytics content with 50 results max",
+    "timeout_handling": "Search with custom 60-second timeout for large instances"
+  },
+  "troubleshooting": {
+    "common_issues": {
+      "no_healthy_instances": "Check instance URLs, authentication credentials, and network connectivity",
+      "timeout_errors": "Increase SEARCH_TIMEOUT or reduce MAX_CONCURRENT_SEARCHES",
+      "cache_issues": "Disable ENABLE_REQUEST_CACHING or reduce SEARCH_CACHE_TTL",
+      "authentication_failures": "Verify PAT tokens or Connected App credentials are valid and not expired"
+    },
+    "monitoring": {
+      "health_checks": "Instances are health-checked every minute",
+      "request_tracking": "Each instance tracks request count and response times",
+      "error_logging": "Failed operations are logged with detailed error messages"
+    }
+  }
+}
