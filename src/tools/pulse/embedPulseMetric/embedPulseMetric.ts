@@ -89,7 +89,7 @@ a Tableau Pulse metric with full interactivity, including time range controls, f
 
               if (metricId) {
                 // Get metric details
-                const metricResult = await restApi.pulseMethods.listMetricsFromMetricIds([
+                const metricResult = await restApi.pulseMethods.listPulseMetricsFromMetricIds([
                   metricId,
                 ]);
 
@@ -107,7 +107,7 @@ a Tableau Pulse metric with full interactivity, including time range controls, f
               } else {
                 // Get metric definition details
                 const definitionResult =
-                  await restApi.pulseMethods.listMetricDefinitionsFromDefinitionIds(
+                  await restApi.pulseMethods.listPulseMetricDefinitionsFromMetricDefinitionIds(
                     [metricDefinitionId!],
                     'DEFINITION_VIEW_DEFAULT',
                   );
