@@ -20,7 +20,8 @@
   },
   "scripts": {
     ":build": "npx rimraf ./build && esbuild src/index.ts --bundle --packages=external --platform=node --format=esm --minify --outdir=build --sourcemap",
-    "build": "run-s :build exec-perms",
+    ":build:pulse-widget": "node scripts/build-pulse-widget.mjs",
+    "build": "run-s :build:pulse-widget :build exec-perms",
     "build:watch": "npm run :build -- --watch",
     "build:docker": "docker build -t tableau-mcp .",
     ":build:mcpb": "npx -y @anthropic-ai/mcpb pack . tableau-mcp.mcpb",
@@ -54,6 +55,7 @@
     "express": "^5.1.0",
     "fast-levenshtein": "^3.0.0",
     "jose": "^6.0.12",
+    "jsonwebtoken": "^9.0.2",
     "ts-results-es": "^5.0.1",
     "zod": "^3.24.3",
     "zod-validation-error": "^4.0.1"
@@ -67,6 +69,7 @@
     "@types/eslint__js": "^8.42.3",
     "@types/express": "^5.0.3",
     "@types/fast-levenshtein": "^0.0.1",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.15.3",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
     "@typescript-eslint/parser": "^8.31.1",

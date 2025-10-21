@@ -1,0 +1,18 @@
+version: "2"
+authtoken: YOUR_NGROK_AUTHTOKEN_HERE
+
+tunnels:
+  apps-pulse:
+    addr: 3000
+    proto: http
+    schemes:
+      - https
+    inspect: true
+    # Optional: use a custom domain if you have ngrok pro
+    # domain: your-subdomain.ngrok-free.app
+
+# To use:
+# 1. Copy this file to ngrok.yml and add your authtoken
+# 2. Run: ngrok start apps-pulse --config ops/ngrok.yml
+# 3. Copy the HTTPS URL (e.g., https://abc123.ngrok-free.app)
+# 4. Use that URL + /mcp as your MCP connector endpoint in ChatGPT

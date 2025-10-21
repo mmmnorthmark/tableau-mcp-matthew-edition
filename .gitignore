@@ -12,3 +12,5 @@ tableau-mcp.dxt
 tableau-mcp.mcpb
 *.pem
 *.tgz
+ops/dev.env
+*.env

@@ -1,0 +1,21 @@
+{
+  "name": "apps-pulse",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tableau Pulse for OpenAI Apps SDK",
+  "scripts": {
+    "dev": "./ops/scripts/dev.sh",
+    "build": "./ops/scripts/build.sh",
+    "mcp:dev": "pnpm --filter @apps-pulse/mcp dev",
+    "mcp:build": "pnpm --filter @apps-pulse/mcp build",
+    "web:dev": "pnpm --filter @apps-pulse/web dev",
+    "web:build": "pnpm --filter @apps-pulse/web build"
+  },
+  "workspaces": [
+    "mcp",
+    "web"
+  ],
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
