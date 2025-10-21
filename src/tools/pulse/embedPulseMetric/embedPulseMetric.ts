@@ -148,12 +148,26 @@ a Tableau Pulse metric with full interactivity, including time range controls, f
                 }
 
                 metricName = definition.specification.basic_specification.name;
-                const defaultMetric = definition.default_metric;
-                if (!defaultMetric) {
-                  throw new Error('Metric definition has no default metric');
+
+                // Try to get the default metric, or fall back to first metric, or first in the list
+                let targetMetric = definition.default_metric;
+
+                if (!targetMetric) {
+                  // No default_metric set, try to find one marked as default in the metrics array
+                  const metrics = definition.metrics;
+                  if (metrics && metrics.length > 0) {
+                    targetMetric = metrics.find((m) => m.is_default) || metrics[0];
+                  }
                 }
 
-                metricUrl = `${config.server}/#/site/${config.siteName}/pulse/metrics/${defaultMetric.id}`;
+                if (!targetMetric) {
+                  throw new Error(
+                    `Metric definition "${metricName}" (${metricDefinitionId}) has no metrics. ` +
+                    `Please create at least one metric for this definition.`
+                  );
+                }
+
+                metricUrl = `${config.server}/#/site/${config.siteName}/pulse/metrics/${targetMetric.id}`;
               }
 
               // Generate Connected Apps token
