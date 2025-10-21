@@ -179,7 +179,11 @@ a Tableau Pulse metric with full interactivity, including time range controls, f
               });
 
               // Load widget template
-              const widgetPath = join(__dirname, 'widget.html');
+              // In bundled code, __dirname is 'build/', widget is at 'build/widget.html'
+              // In source code, __dirname is 'src/tools/pulse/embedPulseMetric/', widget is './widget.html'
+              const widgetPath = __dirname.includes('build')
+                ? join(__dirname, 'widget.html')
+                : join(__dirname, 'widget.html');
               let widgetHtml = readFileSync(widgetPath, 'utf-8');
 
               // Inject metric data and token
