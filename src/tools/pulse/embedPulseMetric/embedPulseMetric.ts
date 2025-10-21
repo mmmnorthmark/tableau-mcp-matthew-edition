@@ -94,12 +94,16 @@ a Tableau Pulse metric with full interactivity, including time range controls, f
                 ]);
 
                 if (metricResult.err) {
-                  throw new Error(`Failed to fetch metric: ${metricResult.val}`);
+                  throw new Error(`Failed to fetch metric: ${metricResult.value}`);
                 }
 
-                const metric = metricResult.val[0];
+                if (!metricResult.value) {
+                  throw new Error(`API returned undefined result for metricId: ${metricId}`);
+                }
+
+                const metric = metricResult.value[0];
                 if (!metric) {
-                  throw new Error(`Metric not found: ${metricId}`);
+                  throw new Error(`Metric not found: ${metricId}. API returned empty array.`);
                 }
 
                 metricName = metric.specification.basic_specification.name;
@@ -109,16 +113,38 @@ a Tableau Pulse metric with full interactivity, including time range controls, f
                 const definitionResult =
                   await restApi.pulseMethods.listPulseMetricDefinitionsFromMetricDefinitionIds(
                     [metricDefinitionId!],
-                    'DEFINITION_VIEW_DEFAULT',
+                    'DEFINITION_VIEW_FULL', // Changed from DEFAULT to FULL to get metrics
                   );
 
                 if (definitionResult.err) {
-                  throw new Error(`Failed to fetch metric definition: ${definitionResult.val}`);
+                  throw new Error(`Failed to fetch metric definition: ${definitionResult.value}`);
                 }
 
-                const definition = definitionResult.val[0];
+                if (!definitionResult.value) {
+                  throw new Error(
+                    `API returned undefined result for metricDefinitionId: ${metricDefinitionId}. ` +
+                      `Result object: ${JSON.stringify(definitionResult)}`,
+                  );
+                }
+
+                if (!Array.isArray(definitionResult.value)) {
+                  throw new Error(
+                    `API returned non-array result: ${typeof definitionResult.value}. ` +
+                      `Value: ${JSON.stringify(definitionResult.value)}`,
+                  );
+                }
+
+                if (definitionResult.value.length === 0) {
+                  throw new Error(
+                    `Metric definition not found: ${metricDefinitionId}. API returned empty array.`,
+                  );
+                }
+
+                const definition = definitionResult.value[0];
                 if (!definition) {
-                  throw new Error(`Metric definition not found: ${metricDefinitionId}`);
+                  throw new Error(
+                    `Metric definition first element is undefined. Array length: ${definitionResult.value.length}`,
+                  );
                 }
 
                 metricName = definition.specification.basic_specification.name;
