@@ -2,6 +2,7 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { Ok } from 'ts-results-es';
 import { z } from 'zod';
 
 import { getConfig } from '../../../config.js';
@@ -201,21 +202,18 @@ a Tableau Pulse metric with full interactivity, including time range controls, f
                 `<script>window.__PULSE_DATA__ = ${JSON.stringify(widgetData)};</script>`,
               );
 
-              // Return result with embedded widget
-              return {
-                ok: true,
-                val: {
-                  content: [
-                    {
-                      type: 'text',
-                      text: `Embedded Pulse metric: ${metricName}\nExpires: ${expiresAt.toISOString()}`,
-                    },
-                  ],
-                  _meta: {
-                    'tableau/embedded-widget': widgetHtml,
+              // Return result with embedded widget wrapped in Ok() for Result type
+              return new Ok({
+                content: [
+                  {
+                    type: 'text',
+                    text: `Embedded Pulse metric: ${metricName}\nExpires: ${expiresAt.toISOString()}`,
                   },
+                ],
+                _meta: {
+                  'tableau/embedded-widget': widgetHtml,
                 },
-              };
+              });
             },
           });
         },
