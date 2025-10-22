@@ -69,6 +69,7 @@ a Tableau Pulse metric with full interactivity, including time range controls, f
       return await embedPulseMetricTool.logAndExecute({
         requestId,
         args: { metricId, metricDefinitionId, username },
+        getSuccessResult: (result) => result, // Return the CallToolResult as-is, don't stringify
         callback: async () => {
           // Validate input
           if (!metricId && !metricDefinitionId) {
@@ -148,7 +149,7 @@ a Tableau Pulse metric with full interactivity, including time range controls, f
                   );
                 }
 
-                metricName = definition.specification.basic_specification.name;
+                metricName = definition.metadata?.name || definition.specification?.basic_specification?.name || 'Unknown Metric';
 
                 // Try to get the default metric, or fall back to first metric, or first in the list
                 let targetMetric = definition.default_metric;
