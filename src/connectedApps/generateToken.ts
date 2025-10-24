@@ -6,6 +6,7 @@ export interface ConnectedAppsTokenParams {
   sub: string; // Tableau username
   ttlSec?: number; // Token time-to-live in seconds (default: 300, max: 600)
   metricUrl?: string; // Optional: validate against this URL
+  scopes?: string[]; // JWT scopes (default: ['tableau:views:embed', 'tableau:metrics:embed'])
 }
 
 export interface ConnectedAppsToken {
@@ -27,7 +28,7 @@ export interface ConnectedAppsToken {
 export function generateConnectedAppsToken(
   params: ConnectedAppsTokenParams,
 ): ConnectedAppsToken {
-  const { sub, ttlSec = 300, metricUrl } = params;
+  const { sub, ttlSec = 300, metricUrl, scopes = ['tableau:views:embed', 'tableau:metrics:embed'] } = params;
   const config = getConfig();
 
   // Validate Connected Apps configuration
@@ -75,7 +76,7 @@ export function generateConnectedAppsToken(
     jti: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     aud: 'tableau',
     sub,
-    scp: ['tableau:views:embed', 'tableau:metrics:embed'],
+    scp: scopes,
   };
 
   const header = {

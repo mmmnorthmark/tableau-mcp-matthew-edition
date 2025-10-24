@@ -32,12 +32,19 @@ export default function App() {
       return;
     }
 
-    // Priority 2: OpenAI tool output
+    // Priority 2: OpenAI structured content (can be object or JSON string)
     if (toolOutput) {
       try {
-        const data = JSON.parse(toolOutput);
-        setPulseData(data);
-      } catch {
+        // Handle both object (structuredContent) and string (legacy) formats
+        if (typeof toolOutput === 'string') {
+          const data = JSON.parse(toolOutput);
+          setPulseData(data);
+        } else {
+          // Already an object from getStructuredContent()
+          setPulseData(toolOutput);
+        }
+      } catch (error) {
+        console.error("Failed to parse pulse data:", error);
         setPulseData(null);
       }
     }

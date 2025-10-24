@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tableau Pulse Metric</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #f8f9fa;
+    }
+    #root {
+      width: 100%;
+      height: 420px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #loading {
+      color: #666;
+      font-size: 14px;
+    }
+    #error {
+      color: #d32f2f;
+      padding: 20px;
+      text-align: center;
+      font-size: 14px;
+    }
+    tableau-pulse {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div id="loading">Loading Tableau Pulse metric...</div>
+  </div>
+
+  <script type="module">
+    // Widget version for cache debugging
+    const WIDGET_VERSION = '__WIDGET_VERSION__';
+
+    // Early logging to confirm script loads
+    console.log('[WIDGET] Script starting... VERSION:', WIDGET_VERSION);
+    console.log('[WIDGET] window.openai exists?', !!window.openai);
+    console.log('[WIDGET] window.openai initial state:', window.openai);
+
+    // Poll for toolOutput to become available (ChatGPT sets it asynchronously)
+    let initStarted = false;
+
+    const checkAndInit = () => {
+      if (initStarted) return;
+
+      const toolOutput = window.openai?.toolOutput;
+      console.log('[WIDGET] Checking toolOutput:', toolOutput);
+
+      if (toolOutput && typeof toolOutput === 'object' && Object.keys(toolOutput).length > 0) {
+        // Check if it's the actual output data (has token/metricUrl) not just input params
+        if ('token' in toolOutput || 'metricUrl' in toolOutput) {
+          console.log('[WIDGET] Found valid toolOutput, initializing...');
+          initStarted = true;
+          initializePulseWidget(toolOutput);
+        }
+      }
+    };
+
+    // Check every 50ms for up to 5 seconds
+    const pollInterval = setInterval(checkAndInit, 50);
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      if (!initStarted) {
+        console.error('[WIDGET] Timeout waiting for toolOutput');
+      }
+    }, 5000);
+
+    // Also check immediately
+    checkAndInit();
+
+    async function initializePulseWidget(toolOutput) {
+      console.log('[WIDGET] initializePulseWidget called with:', toolOutput);
+
+      const root = document.getElementById('root');
+
+      try {
+        if (!toolOutput) {
+          throw new Error('No toolOutput available from OpenAI bridge');
+        }
+
+        console.log('[WIDGET DEBUG] toolOutput keys:', Object.keys(toolOutput));
+
+        const { metricUrl, token, metricName, tableauHost } = toolOutput;
+
+        if (!metricUrl || !token || !tableauHost) {
+          throw new Error('Missing required metric data (metricUrl, token, or tableauHost)');
+        }
+
+        console.log('[WIDGET] Creating Pulse element with:', {
+          metricUrl,
+          tokenLength: token.length,
+          tokenPreview: token.substring(0, 50) + '...',
+          tableauHost,
+          metricName
+        });
+
+        // Function to create and configure the Pulse element
+        const createPulseElement = () => {
+          try {
+            // Create tableau-pulse web component
+            const pulseElement = document.createElement('tableau-pulse');
+            pulseElement.setAttribute('id', 'pulse-embed');
+            pulseElement.setAttribute('src', metricUrl);
+            pulseElement.setAttribute('width', '100%');
+            pulseElement.setAttribute('height', '420');
+            pulseElement.setAttribute('token', token);
+            pulseElement.setAttribute('layout', 'card');
+
+            console.log('[WIDGET] Pulse element created:', pulseElement);
+            console.log('[WIDGET] Token attribute set:', pulseElement.getAttribute('token') ? 'YES' : 'NO');
+
+            // Replace loading indicator with Pulse component
+            root.innerHTML = '';
+            root.appendChild(pulseElement);
+          } catch (embedError) {
+            console.error('Failed to create Pulse embed:', embedError);
+            root.innerHTML = `<div id="error">Failed to create embed: ${embedError.message}</div>`;
+          }
+        };
+
+        // Check if Tableau Embedding API is already loaded
+        if (customElements.get('tableau-pulse')) {
+          // API already loaded, create element immediately
+          createPulseElement();
+        } else {
+          // Load Tableau Embedding API v3
+          const script = document.createElement('script');
+          script.type = 'module';
+          script.src = `${tableauHost}/javascripts/api/tableau.embedding.3.latest.min.js`;
+
+          script.onload = () => {
+            createPulseElement();
+          };
+
+          script.onerror = () => {
+            throw new Error(`Failed to load Tableau Embedding API from ${tableauHost}`);
+          };
+
+          document.head.appendChild(script);
+        }
+
+      } catch (error) {
+        console.error('Failed to load Pulse metric:', error);
+        root.innerHTML = `<div id="error">Failed to load metric: ${error.message}</div>`;
+      }
+    }
+  </script>
+</body>
+</html>

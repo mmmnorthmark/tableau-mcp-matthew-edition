@@ -3,7 +3,9 @@
     "allow": [
       "Bash(pnpm install:*)",
       "Bash(pnpm build:*)",
-      "Bash(pnpm add:*)"
+      "Bash(pnpm add:*)",
+      "Read(//Users/matthewmarkmiller/Downloads/**)",
+      "Read(//Users/matthewmarkmiller/Dropbox/Code/openai-apps-sdk-examples/src/**)"
     ],
     "deny": [],
     "ask": []

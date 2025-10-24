@@ -21,7 +21,7 @@
   "scripts": {
     ":build": "npx rimraf ./build && esbuild src/index.ts --bundle --packages=external --platform=node --format=esm --minify --outdir=build --sourcemap",
     ":build:pulse-widget": "node scripts/build-pulse-widget.mjs",
-    ":copy-widget": "shx mkdir -p build && shx cp src/tools/pulse/embedPulseMetric/widget.html build/widget.html",
+    ":copy-widget": "shx mkdir -p build && shx cp src/tools/pulse/embedPulseMetric/widget.html build/widget.html && shx cp src/tools/pulse/embedPulseMetric/widget-simple.html build/widget-simple.html",
     "build": "run-s :build:pulse-widget :build :copy-widget exec-perms",
     "build:watch": "npm run :build -- --watch",
     "build:docker": "docker build -t tableau-mcp .",

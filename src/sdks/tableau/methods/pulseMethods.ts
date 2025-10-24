@@ -156,10 +156,7 @@ async function guardAgainstPulseDisabled<T>(callback: () => Promise<T>): Promise
     return new Ok(await callback());
   } catch (error) {
     if (isAxiosError(error)) {
-      if (error.response?.status === 404) {
-        return new Err('tableau-server');
-      }
-
+      // Check for Pulse disabled on Tableau Cloud
       if (
         error.response?.status === 400 &&
         error.response.headers.tableau_error_code === '0xd3408984' &&
@@ -168,6 +165,12 @@ async function guardAgainstPulseDisabled<T>(callback: () => Promise<T>): Promise
         // ntbue-service-chassis/-/blob/main/server/interceptors/site_settings.go
         return new Err('pulse-disabled');
       }
+
+      // Note: We removed the 404 check for 'tableau-server' because:
+      // 1. 404 can occur for many reasons (permissions, wrong endpoint, etc.)
+      // 2. Tableau Server users should configure EXCLUDE_TOOLS instead
+      // 3. False positives were causing issues for Tableau Cloud users
+      // Let 404 errors propagate normally so they can be properly debugged
     }
 
     throw error;

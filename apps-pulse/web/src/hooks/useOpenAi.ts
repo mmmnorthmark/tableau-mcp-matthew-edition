@@ -28,6 +28,7 @@ declare global {
     openai?: {
       getToolInput: () => Promise<ToolInput>;
       getToolOutput: () => Promise<string>;
+      getStructuredContent: () => Promise<any>;
       getWidgetState: () => Promise<WidgetState>;
       setWidgetState: (state: WidgetState) => Promise<void>;
       requestDisplayMode: (mode: "default" | "fullscreen") => Promise<void>;
@@ -47,11 +48,19 @@ export function useOpenAI(): OpenAIHelpers {
     const init = async () => {
       if (window.openai) {
         try {
-          const [input, output, state] = await Promise.all([
+          const [input, state] = await Promise.all([
             window.openai.getToolInput(),
-            window.openai.getToolOutput(),
             window.openai.getWidgetState(),
           ]);
+
+          // Try getStructuredContent() first (new API), fallback to getToolOutput()
+          let output = null;
+          if (window.openai.getStructuredContent) {
+            output = await window.openai.getStructuredContent();
+          } else {
+            output = await window.openai.getToolOutput();
+          }
+
           setToolInput(input);
           setToolOutput(output);
           setWidgetStateInternal(state || {});

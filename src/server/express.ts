@@ -89,6 +89,7 @@ export async function startExpressServer({
       });
 
       server.registerTools();
+      server.registerResources();
       server.registerRequestHandlers();
 
       await server.connect(transport);

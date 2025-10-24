@@ -35,6 +35,12 @@ export type ToolParams<Args extends ZodRawShape | undefined = undefined> = {
   // The annotations of the tool
   annotations: ToolAnnotations;
 
+  // Optional title for the tool (used by OpenAI Apps SDK)
+  title?: string;
+
+  // Optional metadata for the tool (used by OpenAI Apps SDK)
+  _meta?: Record<string, unknown>;
+
   // A function that validates the tool's arguments provided by the client
   argsValidator?: ArgsValidator<Args>;
 
@@ -78,6 +84,8 @@ export class Tool<Args extends ZodRawShape | undefined = undefined> {
   description: string;
   paramsSchema: Args;
   annotations: ToolAnnotations;
+  title?: string;
+  _meta?: Record<string, unknown>;
   argsValidator?: ArgsValidator<Args>;
   callback: ToolCallback<Args>;
 
@@ -87,6 +95,8 @@ export class Tool<Args extends ZodRawShape | undefined = undefined> {
     description,
     paramsSchema,
     annotations,
+    title,
+    _meta,
     argsValidator,
     callback,
   }: ToolParams<Args>) {
@@ -95,6 +105,8 @@ export class Tool<Args extends ZodRawShape | undefined = undefined> {
     this.description = description;
     this.paramsSchema = paramsSchema;
     this.annotations = annotations;
+    this.title = title;
+    this._meta = _meta;
     this.argsValidator = argsValidator;
     this.callback = callback;
   }
@@ -210,4 +222,78 @@ function getErrorResult(requestId: RequestId, error: unknown): CallToolResult {
       },
     ],
   };
+}
+
+/**
+ * Represents an OpenAI Apps SDK tool (widget tool)
+ * Extends the standard Tool class with Apps SDK-specific metadata
+ *
+ * @template Args - The schema of the tool's parameters or undefined if the tool has no parameters
+ */
+export class AppTool<Args extends ZodRawShape | undefined = undefined> extends Tool<Args> {
+  /**
+   * Indicates this is an OpenAI Apps SDK tool that needs special handling
+   */
+  readonly isAppTool = true;
+
+  constructor(params: Required<Pick<ToolParams<Args>, 'title' | '_meta'>> & ToolParams<Args>) {
+    super(params);
+
+    // Validate that required Apps SDK metadata is present
+    if (!this._meta?.['openai/outputTemplate']) {
+      throw new Error('AppTool requires _meta with openai/outputTemplate');
+    }
+  }
+
+  /**
+   * Returns the tool descriptor in OpenAI Apps SDK format
+   * with _meta and title at the top level
+   */
+  toOpenAIToolDescriptor() {
+    return {
+      name: this.name,
+      description: this.description,
+      inputSchema: this.getInputSchema(),
+      title: this.title,
+      _meta: this._meta,
+      annotations: this.annotations,
+    };
+  }
+
+  /**
+   * Converts Zod paramsSchema to JSON Schema for OpenAI
+   */
+  private getInputSchema() {
+    if (!this.paramsSchema) {
+      return {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      };
+    }
+
+    const properties: Record<string, any> = {};
+    const required: string[] = [];
+
+    for (const [key, schema] of Object.entries(this.paramsSchema)) {
+      // Extract Zod schema info
+      const zodSchema = schema as any;
+      const isOptional = zodSchema._def?.typeName === 'ZodOptional';
+
+      // Basic type mapping (can be extended)
+      properties[key] = { type: 'string' };
+
+      if (!isOptional) {
+        required.push(key);
+      }
+    }
+
+    return {
+      type: 'object',
+      properties,
+      required,
+      additionalProperties: false,
+      $schema: 'http://json-schema.org/draft-07/schema#',
+    };
+  }
 }

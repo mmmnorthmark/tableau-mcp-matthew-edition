@@ -18,6 +18,7 @@ async function startServer(): Promise<void> {
     case 'stdio': {
       const server = new Server();
       server.registerTools();
+      server.registerResources();
       server.registerRequestHandlers();
 
       const transport = new StdioServerTransport();
