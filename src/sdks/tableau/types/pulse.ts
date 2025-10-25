@@ -39,19 +39,23 @@ const pulseSpecificationSchema = z.object({
   is_running_total: z.boolean(),
 });
 
-export const pulseExtensionOptionsSchema = z.object({
-  allowed_dimensions: z.array(z.string()),
-  allowed_granularities: z.array(z.string()),
-  offset_from_today: z.number(),
-});
+export const pulseExtensionOptionsSchema = z
+  .object({
+    allowed_dimensions: z.array(z.string()),
+    allowed_granularities: z.array(z.string()),
+    offset_from_today: z.number(),
+  })
+  .passthrough();
 
 export const pulseMetricSpecificationSchema = z.object({
   filters: z.array(pulseFilterSchema),
-  measurement_period: z.object({
-    granularity: z.string(),
-    range: z.string(),
-  }),
-  comparison: z.object({ comparison: z.string() }),
+  measurement_period: z
+    .object({
+      granularity: z.string(),
+      range: z.string(),
+    })
+    .passthrough(),
+  comparison: z.object({ comparison: z.string() }).passthrough(),
 });
 
 export const pulseGoalsSchema = z.object({
@@ -76,18 +80,21 @@ export const pulseRepresentationOptionsSchema = z.object({
     plural_noun: z.string(),
   }),
   sentiment_type: z.string(),
-  row_level_id_field: z.object({ identifier_col: z.string() }),
+  row_level_id_field: z.object({ identifier_col: z.string() }).passthrough(),
   row_level_entity_names: z.object({
     entity_name_singular: z.string().optional(),
     entity_name_plural: z.string().optional(),
   }),
-  row_level_name_field: z.object({ name_col: z.string() }),
+  row_level_name_field: z.object({ name_col: z.string() }).passthrough(),
   currency_code: z.string(),
 });
 
-export const insightOptionsSchema = z.object({
-  settings: z.array(z.object({ type: z.string(), disabled: z.boolean() })),
-});
+export const insightOptionsSchema = z
+  .object({
+    show_insights: z.boolean().optional(),
+    settings: z.array(z.object({ type: z.string(), disabled: z.boolean() })),
+  })
+  .passthrough();
 
 export const comparisonSchema = z.object({
   comparisons: z.array(

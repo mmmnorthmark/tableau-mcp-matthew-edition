@@ -141,11 +141,22 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
     bundleType: PulseInsightBundleType,
   ): Promise<PulseResult<z.infer<typeof pulseBundleResponseSchema>>> => {
     return await guardAgainstPulseDisabled(async () => {
-      const response = await this._apiClient.generatePulseMetricValueInsightBundle(
-        { bundle_request: bundleRequest.bundle_request },
-        { params: { bundle_type: bundleType }, ...this.authHeader },
-      );
-      return response ?? {};
+      try {
+        const response = await this._apiClient.generatePulseMetricValueInsightBundle(
+          bundleRequest,
+          { params: { bundle_type: bundleType }, ...this.authHeader },
+        );
+        return response ?? {};
+      } catch (error) {
+        // Re-throw with more context about the request
+        if (isAxiosError(error) && error.response?.status === 400) {
+          const errorData = error.response.data;
+          throw new Error(
+            `Pulse API 400 error: ${JSON.stringify(errorData)}. Request metadata: ${JSON.stringify(bundleRequest.bundle_request.input.metadata)}`,
+          );
+        }
+        throw error;
+      }
     });
   };
 }

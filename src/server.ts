@@ -1,9 +1,19 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { SetLevelRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ReadResourceRequestSchema,
+  SetLevelRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 
 import pkg from '../package.json' with { type: 'json' };
 import { getConfig } from './config.js';
 import { setLogLevel } from './logging/log.js';
+import {
+  getPulseWidgetResources,
+  getPulseWidgetResourceTemplates,
+  readPulseWidgetResource,
+} from './tools/pulse/renderPulseMetric/resources.js';
 import { Tool } from './tools/tool.js';
 import { toolNames } from './tools/toolName.js';
 import { toolFactories } from './tools/tools.js';
@@ -25,6 +35,7 @@ export class Server extends McpServer {
         capabilities: {
           logging: {},
           tools: {},
+          resources: {},
         },
       },
     );
@@ -34,14 +45,22 @@ export class Server extends McpServer {
   }
 
   registerTools = (): void => {
-    for (const {
-      name,
-      description,
-      paramsSchema,
-      annotations,
-      callback,
-    } of this._getToolsToRegister()) {
-      this.tool(name, description, paramsSchema, annotations, callback);
+    for (const tool of this._getToolsToRegister()) {
+      const { name, description, paramsSchema, annotations, title, _meta, callback } = tool;
+
+      // Use registerTool for tools with _meta (OpenAI Apps SDK widgets)
+      if (_meta) {
+        this.registerTool(name, {
+          title,
+          description,
+          inputSchema: paramsSchema,
+          annotations,
+          _meta,
+        }, callback);
+      } else {
+        // Use standard tool() for regular tools
+        this.tool(name, description, paramsSchema, annotations, callback);
+      }
     }
   };
 
@@ -50,6 +69,22 @@ export class Server extends McpServer {
       setLogLevel(this, request.params.level);
       return {};
     });
+
+    // Resource handlers for OpenAI Apps SDK widgets
+    this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+      resources: getPulseWidgetResources(),
+    }));
+
+    this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+      const resource = readPulseWidgetResource(request.params.uri);
+      return {
+        contents: [resource],
+      };
+    });
+
+    this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+      resourceTemplates: getPulseWidgetResourceTemplates(),
+    }));
   };
 
   private _getToolsToRegister = (): Array<Tool<any>> => {
