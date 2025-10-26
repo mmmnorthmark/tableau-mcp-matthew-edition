@@ -20,7 +20,8 @@
   },
   "scripts": {
     ":build": "npx rimraf ./build && esbuild src/index.ts --bundle --packages=external --platform=node --format=esm --minify --outdir=build --sourcemap",
-    "build": "run-s :build exec-perms",
+    ":build:widget": "cd widget && npm run build",
+    "build": "run-s :build:widget :build exec-perms",
     "build:watch": "npm run :build -- --watch",
     "build:docker": "docker build -t tableau-mcp .",
     ":build:mcpb": "npx -y @anthropic-ai/mcpb pack . tableau-mcp.mcpb",
@@ -56,6 +57,9 @@
     "fast-levenshtein": "^3.0.0",
     "jose": "^6.0.12",
     "ts-results-es": "^5.0.1",
+    "vega": "^6.2.0",
+    "vega-embed": "^7.1.0",
+    "vega-lite": "^6.4.1",
     "zod": "^3.24.3",
     "zod-validation-error": "^4.0.1"
   },

@@ -1,0 +1,307 @@
+/**
+ * Generates the HTML widget for rendering a Pulse metric in OpenAI Apps SDK
+ */
+export function renderPulseMetricHtml(metricId: string, definitionId?: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tableau Pulse Metric</title>
+  <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      padding: 16px;
+      background: transparent;
+    }
+
+    .metric-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .metric-header {
+      margin-bottom: 16px;
+    }
+
+    .metric-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #1a1a1a;
+    }
+
+    .metric-description {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 16px;
+    }
+
+    .metric-value {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #1a1a1a;
+    }
+
+    .metric-change {
+      font-size: 16px;
+      margin-bottom: 16px;
+    }
+
+    .metric-change.positive {
+      color: #10b981;
+    }
+
+    .metric-change.negative {
+      color: #ef4444;
+    }
+
+    .visualization {
+      margin: 24px 0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .insights {
+      margin-top: 24px;
+    }
+
+    .insight-item {
+      padding: 12px;
+      margin-bottom: 8px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .error {
+      padding: 16px;
+      background: #fee2e2;
+      border: 1px solid #ef4444;
+      border-radius: 6px;
+      color: #991b1b;
+      margin-bottom: 16px;
+    }
+
+    .dark-mode {
+      background: #1a1a1a;
+    }
+
+    .dark-mode .metric-title,
+    .dark-mode .metric-value {
+      color: #ffffff;
+    }
+
+    .dark-mode .metric-description {
+      color: #a3a3a3;
+    }
+
+    .dark-mode .insight-item {
+      background: #2a2a2a;
+      color: #e5e5e5;
+    }
+
+    .dark-mode .loading {
+      color: #a3a3a3;
+    }
+  </style>
+</head>
+<body>
+  <div class="metric-container">
+    <div id="loading" class="loading">
+      Loading metric data...
+    </div>
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="content" style="display: none;">
+      <div class="metric-header">
+        <h1 class="metric-title" id="metric-name"></h1>
+        <p class="metric-description" id="metric-description"></p>
+      </div>
+      <div id="metric-stats"></div>
+      <div id="visualization" class="visualization"></div>
+      <div id="insights" class="insights"></div>
+    </div>
+  </div>
+
+  <script>
+    const METRIC_ID = '${metricId}';
+    const DEFINITION_ID = ${definitionId ? `'${definitionId}'` : 'null'};
+
+    // Apply theme from OpenAI globals
+    function applyTheme() {
+      if (window.openai?.theme === 'dark') {
+        document.body.classList.add('dark-mode');
+      } else {
+        document.body.classList.remove('dark-mode');
+      }
+    }
+
+    // Listen for theme changes
+    window.addEventListener('openai:set_globals', (event) => {
+      if (event.detail?.globals?.theme) {
+        applyTheme();
+      }
+    });
+
+    // Show error message
+    function showError(message) {
+      const errorEl = document.getElementById('error');
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    // Call MCP tool via window.openai
+    async function callMcpTool(toolName, args) {
+      try {
+        const result = await window.openai.callTool(toolName, args);
+        return JSON.parse(result.result);
+      } catch (error) {
+        console.error(\`Error calling tool \${toolName}:\`, error);
+        throw new Error(\`Failed to call \${toolName}: \${error.message}\`);
+      }
+    }
+
+    // Fetch metric data
+    async function fetchMetricData() {
+      // First, get the metric to find the definition ID if not provided
+      const metricData = await callMcpTool('list-pulse-metrics-from-metric-ids', {
+        metricIds: [METRIC_ID]
+      });
+
+      if (!metricData.metrics || metricData.metrics.length === 0) {
+        throw new Error('Metric not found');
+      }
+
+      const metric = metricData.metrics[0];
+      const defId = DEFINITION_ID || metric.definition_id;
+
+      // Get the metric definition
+      const definitionData = await callMcpTool('list-pulse-metric-definitions-from-definition-ids', {
+        definitionIds: [defId]
+      });
+
+      if (!definitionData.metric_definitions || definitionData.metric_definitions.length === 0) {
+        throw new Error('Metric definition not found');
+      }
+
+      const definition = definitionData.metric_definitions[0];
+
+      return { metric, definition };
+    }
+
+    // Generate insight bundle
+    async function generateInsightBundle(metric, definition) {
+      const bundleRequest = {
+        bundle_request: {
+          version: 1,
+          options: {
+            output_format: 'OUTPUT_FORMAT_HTML',
+            time_zone: window.openai?.locale?.includes('US') ? 'America/New_York' : 'UTC',
+            language: 'LANGUAGE_EN_US',
+            locale: 'LOCALE_EN_US',
+          },
+          input: {
+            metadata: {
+              name: definition.metadata?.name || 'Pulse Metric',
+              metric_id: metric.id,
+              definition_id: definition.id,
+            },
+            metric: {
+              definition: definition.specification,
+              metric_specification: metric.specification,
+              extension_options: definition.extension_options,
+              representation_options: definition.representation_options,
+              insights_options: definition.insights_options || { show_insights: true, settings: [] },
+              goals: metric.goals || {},
+            },
+          },
+        },
+      };
+
+      return await callMcpTool('generate-pulse-metric-value-insight-bundle', {
+        bundleRequest,
+        bundleType: 'ban',
+      });
+    }
+
+    // Render the metric
+    async function renderMetric() {
+      try {
+        applyTheme();
+
+        // Fetch data
+        const { metric, definition } = await fetchMetricData();
+
+        // Set basic info
+        document.getElementById('metric-name').textContent = definition.metadata?.name || 'Pulse Metric';
+        document.getElementById('metric-description').textContent = definition.metadata?.description || '';
+
+        // Generate insight bundle
+        const insightBundle = await generateInsightBundle(metric, definition);
+
+        // Parse the bundle response
+        if (insightBundle.bundle_response?.result?.insights) {
+          const insights = insightBundle.bundle_response.result.insights;
+
+          // Render insights
+          const insightsHtml = insights
+            .filter(insight => insight.result?.markup)
+            .map(insight => \`<div class="insight-item">\${insight.result.markup}</div>\`)
+            .join('');
+
+          if (insightsHtml) {
+            document.getElementById('insights').innerHTML = insightsHtml;
+          }
+
+          // Find and render Vega-Lite visualization
+          const vizInsight = insights.find(insight => insight.result?.viz);
+          if (vizInsight?.result?.viz) {
+            const vegaSpec = vizInsight.result.viz;
+
+            // Render with vega-embed
+            await vegaEmbed('#visualization', vegaSpec, {
+              actions: false,
+              theme: window.openai?.theme === 'dark' ? 'dark' : 'default',
+            });
+          }
+        }
+
+        // Show content
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+
+      } catch (error) {
+        console.error('Error rendering metric:', error);
+        showError(\`Error: \${error.message}\`);
+      }
+    }
+
+    // Check if window.openai is available
+    if (typeof window.openai === 'undefined') {
+      showError('This widget requires the OpenAI Apps SDK environment.');
+    } else {
+      // Start rendering
+      renderMetric();
+    }
+  </script>
+</body>
+</html>`;
+}

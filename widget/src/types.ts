@@ -1,19 +1,25 @@
-// OpenAI Apps SDK types
+// OpenAI Apps SDK types (based on official SDK examples)
 export interface OpenAIGlobals {
-  theme?: 'light' | 'dark';
-  locale?: string;
-  displayMode?: 'inline' | 'fullscreen';
+  // Visuals
+  theme: 'light' | 'dark';
+  locale: string;
 
-  // Direct properties (available immediately)
-  toolInput?: any;
-  toolOutput?: any;
+  // Layout
+  maxHeight: number;
+  displayMode: 'pip' | 'inline' | 'fullscreen';
 
-  // Async methods to get tool data
-  getToolInput?: () => Promise<any>;
-  getToolOutput?: () => Promise<any>;
-  getStructuredContent?: () => Promise<PulseMetricData>;
-  getWidgetState?: () => Promise<any>;
-  setWidgetState?: (state: any) => Promise<void>;
+  // State - direct properties (NOT methods)
+  toolInput: any;
+  toolOutput: PulseMetricData | null;
+  toolResponseMetadata: any | null;
+  widgetState: any | null;
+  setWidgetState: (state: any) => Promise<void>;
+
+  // API methods
+  callTool?: (name: string, args: Record<string, unknown>) => Promise<{ result: string }>;
+  sendFollowUpMessage?: (args: { prompt: string }) => Promise<void>;
+  openExternal?: (payload: { href: string }) => void;
+  requestDisplayMode?: (args: { mode: 'pip' | 'inline' | 'fullscreen' }) => Promise<{ mode: 'pip' | 'inline' | 'fullscreen' }>;
 }
 
 // Pulse metric data structure (matches what the MCP tool returns)

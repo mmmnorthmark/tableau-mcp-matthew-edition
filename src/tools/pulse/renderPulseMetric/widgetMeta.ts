@@ -2,7 +2,8 @@
  * Widget metadata for OpenAI Apps SDK integration
  */
 
-export const PULSE_WIDGET_URI = 'ui://widget/pulse-metric.html';
+// Add version to bust cache when widget changes
+export const PULSE_WIDGET_URI = 'ui://widget/pulse-metric.html?v=4';
 
 export function createPulseWidgetMeta() {
   return {

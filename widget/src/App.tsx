@@ -87,98 +87,95 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
-    // Load data from OpenAI async methods
-    const loadData = async () => {
+    // Load data from OpenAI toolOutput (direct property access)
+    const loadData = () => {
       console.log('[Pulse Widget] window.openai:', window.openai);
 
       if (!window.openai) {
-        setError('OpenAI context not available');
+        console.log('[Pulse Widget] window.openai not available yet');
+        return;
+      }
+
+      // Access toolOutput directly from window.openai (not a method call)
+      const toolOutput: any = window.openai.toolOutput;
+      console.log('[Pulse Widget] toolOutput:', toolOutput);
+
+      if (!toolOutput) {
+        console.log('[Pulse Widget] No toolOutput available yet');
         return;
       }
 
       try {
-        console.log('[Pulse Widget] Has getStructuredContent?', !!window.openai.getStructuredContent);
-        console.log('[Pulse Widget] Has getToolOutput?', !!window.openai.getToolOutput);
+        // toolOutput contains the MCP response - extract structuredContent
+        let pulseData: PulseMetricData | null = null;
 
-        // Try getStructuredContent() first (newer API), fallback to getToolOutput()
-        let pulseData = null;
-        if (window.openai.getStructuredContent) {
-          console.log('[Pulse Widget] Calling getStructuredContent()...');
-          pulseData = await window.openai.getStructuredContent();
-          console.log('[Pulse Widget] getStructuredContent() returned:', pulseData);
-        } else if (window.openai.getToolOutput) {
-          console.log('[Pulse Widget] Calling getToolOutput()...');
-          const output = await window.openai.getToolOutput();
-          console.log('[Pulse Widget] getToolOutput() returned:', output);
-          console.log('[Pulse Widget] output type:', typeof output);
+        console.log('[Pulse Widget] toolOutput type:', typeof toolOutput);
+        console.log('[Pulse Widget] toolOutput keys:', Object.keys(toolOutput));
 
-          // Output might be a JSON string or already an object
-          if (typeof output === 'string') {
-            console.log('[Pulse Widget] Parsing JSON string...');
-            pulseData = JSON.parse(output);
+        // OpenAI wraps the MCP response in {text: '...'} where text is a JSON string
+        if (toolOutput.text && typeof toolOutput.text === 'string') {
+          console.log('[Pulse Widget] Parsing MCP response from text property');
+          const mcpResponse = JSON.parse(toolOutput.text);
+          console.log('[Pulse Widget] Parsed MCP response:', mcpResponse);
+          console.log('[Pulse Widget] MCP response keys:', Object.keys(mcpResponse));
+
+          // Extract structuredContent from the MCP response
+          if (mcpResponse.structuredContent) {
+            pulseData = mcpResponse.structuredContent;
+            console.log('[Pulse Widget] Found structuredContent:', pulseData);
           } else {
-            pulseData = output;
+            console.error('[Pulse Widget] No structuredContent in MCP response');
+            console.error('[Pulse Widget] Available keys:', Object.keys(mcpResponse));
+            setError('No metric data in response');
+            return;
           }
-          console.log('[Pulse Widget] Final pulseData:', pulseData);
-        } else if (window.openai.toolOutput) {
-          // Fallback: try reading directly from window.openai.toolOutput
-          console.log('[Pulse Widget] Using direct toolOutput property:', window.openai.toolOutput);
-
-          // Check if toolOutput.content exists and has data
-          if (window.openai.toolOutput.content && window.openai.toolOutput.content[0]?.text) {
-            const textContent = window.openai.toolOutput.content[0].text;
-            console.log('[Pulse Widget] Found text content:', textContent);
-
-            // Parse the JSON string
-            const parsedData = JSON.parse(textContent);
-            console.log('[Pulse Widget] Parsed data:', parsedData);
-
-            // Check if there's a warning (validation error)
-            if (parsedData.warning) {
-              console.error('[Pulse Widget] Validation error:', parsedData.warning);
-              setError(`Validation error: ${parsedData.warning}`);
-              return;
-            }
-
-            // Extract the structured content from MCP response
-            if (parsedData.structuredContent) {
-              pulseData = parsedData.structuredContent;
-            } else if (parsedData.data?.bundle_request) {
-              // Old error case with bundle_request
-              pulseData = parsedData.data;
-            } else {
-              pulseData = parsedData;
-            }
-          }
+        } else if (toolOutput.insightBundle) {
+          // Already the right format (structuredContent directly)
+          console.log('[Pulse Widget] Using toolOutput directly as PulseMetricData');
+          pulseData = toolOutput as PulseMetricData;
+        } else {
+          console.error('[Pulse Widget] Unexpected toolOutput format');
+          console.error('[Pulse Widget] toolOutput:', toolOutput);
+          setError('Unexpected data format');
+          return;
         }
 
         if (!pulseData) {
-          console.error('[Pulse Widget] No data received from OpenAI methods');
           setError('No metric data provided');
           return;
         }
 
         setData(pulseData);
+        console.log('[Pulse Widget] Data loaded successfully:', pulseData);
       } catch (error) {
         console.error('[Pulse Widget] Failed to load data:', error);
         setError(`Failed to load metric data: ${error}`);
       }
     };
 
+    // Load initial data
     loadData();
 
     // Apply theme (force light mode temporarily)
     setTheme('light');
     document.body.classList.toggle('dark-mode', false);
 
-    // Listen for theme changes (disabled - forcing light mode)
+    // Listen for global updates (including toolOutput)
     const handleSetGlobals = ((event: CustomEvent) => {
-      // Ignore theme changes for now
-      if (event.detail?.globals?.theme) {
-        // const newTheme = event.detail.globals.theme;
-        // setTheme(newTheme);
-        // document.body.classList.toggle('dark-mode', newTheme === 'dark');
+      console.log('[Pulse Widget] set_globals event:', event.detail);
+
+      // Reload data when toolOutput changes
+      if (event.detail?.globals?.toolOutput !== undefined) {
+        console.log('[Pulse Widget] toolOutput updated, reloading...');
+        loadData();
       }
+
+      // Ignore theme changes for now (forcing light mode)
+      // if (event.detail?.globals?.theme) {
+      //   const newTheme = event.detail.globals.theme;
+      //   setTheme(newTheme);
+      //   document.body.classList.toggle('dark-mode', newTheme === 'dark');
+      // }
     }) as EventListener;
 
     window.addEventListener('openai:set_globals', handleSetGlobals);
@@ -312,7 +309,7 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '24px 0',
     borderRadius: '8px',
     overflow: 'hidden',
-    minHeight: '200px',
+    height: '300px', // Fixed height to prevent infinite growth
     width: '100%',
     background: 'var(--bg-secondary, #f3f4f6)',
   },

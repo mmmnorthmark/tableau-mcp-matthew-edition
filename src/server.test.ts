@@ -28,13 +28,29 @@ describe('server', () => {
 
     const tools = toolFactories.map((tool) => tool(server));
     for (const tool of tools) {
-      expect(server.tool).toHaveBeenCalledWith(
-        tool.name,
-        tool.description,
-        expect.any(Object),
-        expect.any(Object),
-        expect.any(Function),
-      );
+      if (tool._meta) {
+        // Tools with _meta should use registerTool()
+        expect(server.registerTool).toHaveBeenCalledWith(
+          tool.name,
+          {
+            title: tool.title,
+            description: tool.description,
+            inputSchema: expect.any(Object),
+            annotations: expect.any(Object),
+            _meta: tool._meta,
+          },
+          expect.any(Function),
+        );
+      } else {
+        // Tools without _meta should use tool()
+        expect(server.tool).toHaveBeenCalledWith(
+          tool.name,
+          tool.description,
+          expect.any(Object),
+          expect.any(Object),
+          expect.any(Function),
+        );
+      }
     }
   });
 
@@ -44,6 +60,7 @@ describe('server', () => {
     server.registerTools();
 
     const tool = getQueryDatasourceTool(server);
+    // query-datasource doesn't have _meta
     expect(server.tool).toHaveBeenCalledWith(
       tool.name,
       tool.description,
@@ -61,14 +78,34 @@ describe('server', () => {
     const tools = toolFactories.map((tool) => tool(server));
     for (const tool of tools) {
       if (tool.name === 'query-datasource') {
+        // query-datasource should not be registered
         expect(server.tool).not.toHaveBeenCalledWith(
           tool.name,
-          tool.description,
-          expect.any(Object),
-          expect.any(Object),
+          expect.anything(),
+          expect.anything(),
+          expect.anything(),
+          expect.anything(),
+        );
+        expect(server.registerTool).not.toHaveBeenCalledWith(
+          tool.name,
+          expect.anything(),
+          expect.anything(),
+        );
+      } else if (tool._meta) {
+        // Tools with _meta should use registerTool()
+        expect(server.registerTool).toHaveBeenCalledWith(
+          tool.name,
+          {
+            title: tool.title,
+            description: tool.description,
+            inputSchema: expect.any(Object),
+            annotations: expect.any(Object),
+            _meta: tool._meta,
+          },
           expect.any(Function),
         );
       } else {
+        // Tools without _meta should use tool()
         expect(server.tool).toHaveBeenCalledWith(
           tool.name,
           tool.description,
@@ -112,5 +149,6 @@ describe('server', () => {
 function getServer(): InstanceType<typeof Server> {
   const server = new Server();
   server.tool = vi.fn();
+  server.registerTool = vi.fn();
   return server;
 }
