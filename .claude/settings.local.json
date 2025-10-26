@@ -12,7 +12,9 @@
       "Bash(npm run :build)",
       "Read(//Users/matthewmarkmiller/Downloads/**)",
       "Bash(git add:*)",
-      "Read(//Users/matthewmarkmiller/Dropbox/Code/openai-apps-sdk-examples/**)"
+      "Read(//Users/matthewmarkmiller/Dropbox/Code/openai-apps-sdk-examples/**)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

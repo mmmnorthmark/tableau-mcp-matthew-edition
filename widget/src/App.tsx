@@ -2,12 +2,22 @@ import { useEffect, useState } from 'react';
 import vegaEmbed from 'vega-embed';
 import type { PulseMetricData, Insight } from './types';
 
+// Special metric configuration for humidity monitoring (backyard pine tree)
+const HUMIDITY_METRIC_CONFIG = {
+  definitionId: '02e21b8e-71db-4bc2-b56b-849f44afb516',
+  minThreshold: 40,
+  maxThreshold: 60,
+  criticalMinThreshold: 35,
+  criticalMaxThreshold: 65,
+} as const;
+
 /**
  * Transform Pulse viz spec to fix formatting issues:
  * 1. Convert custom axis formatters to labelExpr (Vega-Lite native)
  * 2. Simplify tooltip to show only formatted text
+ * 3. Add humidity range indicators for special metrics
  */
-function transformVizSpec(vizSpec: any): any {
+function transformVizSpec(vizSpec: any, definitionId?: string, currentValue?: number): any {
   const transformed = JSON.parse(JSON.stringify(vizSpec)); // Deep clone
   const formatterMaps = transformed.customFormatterMaps || {};
 
@@ -78,7 +88,98 @@ function transformVizSpec(vizSpec: any): any {
     transformLayer(transformed);
   }
 
+  // Add humidity range indicators for the backyard pine tree metric
+  if (definitionId === HUMIDITY_METRIC_CONFIG.definitionId && currentValue !== undefined) {
+    console.log('[Humidity Monitor] Adding range indicators for value:', currentValue);
+
+    // Ensure we have a layer array
+    if (!transformed.layer) {
+      transformed.layer = [{ ...transformed }];
+      delete transformed.mark;
+      delete transformed.encoding;
+    }
+
+    // Add reference lines at 40% and 60% (optimal range boundaries)
+    const referenceLinesColor = currentValue < HUMIDITY_METRIC_CONFIG.minThreshold || currentValue > HUMIDITY_METRIC_CONFIG.maxThreshold
+      ? '#ef4444' // Red if out of range
+      : '#10b981'; // Green if in range
+
+    transformed.layer.push(
+      {
+        mark: { type: 'rule', strokeDash: [4, 4], strokeWidth: 2, opacity: 0.7 },
+        encoding: {
+          y: { datum: HUMIDITY_METRIC_CONFIG.minThreshold },
+          color: { value: referenceLinesColor },
+        },
+      },
+      {
+        mark: { type: 'rule', strokeDash: [4, 4], strokeWidth: 2, opacity: 0.7 },
+        encoding: {
+          y: { datum: HUMIDITY_METRIC_CONFIG.maxThreshold },
+          color: { value: referenceLinesColor },
+        },
+      },
+    );
+
+    // Add shaded optimal range region
+    transformed.layer.push({
+      mark: { type: 'rect', opacity: 0.1 },
+      encoding: {
+        y: { datum: HUMIDITY_METRIC_CONFIG.minThreshold },
+        y2: { datum: HUMIDITY_METRIC_CONFIG.maxThreshold },
+        color: { value: '#10b981' }, // Green shade
+      },
+    });
+  }
+
   return transformed;
+}
+
+/**
+ * Get humidity status for the backyard pine tree metric
+ */
+function getHumidityStatus(definitionId?: string, currentValue?: number) {
+  if (definitionId !== HUMIDITY_METRIC_CONFIG.definitionId || currentValue === undefined) {
+    return null;
+  }
+
+  if (currentValue < HUMIDITY_METRIC_CONFIG.criticalMinThreshold) {
+    return {
+      level: 'critical',
+      message: '⚠️ Soil humidity is critically low. Water immediately!',
+      color: '#dc2626',
+    };
+  }
+
+  if (currentValue > HUMIDITY_METRIC_CONFIG.criticalMaxThreshold) {
+    return {
+      level: 'critical',
+      message: '⚠️ Soil humidity is critically high. Check drainage!',
+      color: '#dc2626',
+    };
+  }
+
+  if (currentValue < HUMIDITY_METRIC_CONFIG.minThreshold) {
+    return {
+      level: 'warning',
+      message: '⚠️ Soil humidity is below optimal range. Consider watering.',
+      color: '#f59e0b',
+    };
+  }
+
+  if (currentValue > HUMIDITY_METRIC_CONFIG.maxThreshold) {
+    return {
+      level: 'warning',
+      message: '⚠️ Soil humidity is above optimal range. Check for overwatering.',
+      color: '#f59e0b',
+    };
+  }
+
+  return {
+    level: 'good',
+    message: '✅ Soil humidity is in the optimal range (40-60%)',
+    color: '#10b981',
+  };
 }
 
 export default function App() {
@@ -216,8 +317,13 @@ export default function App() {
       const originalViz = vizInsight.result.viz;
       console.log('[Pulse Widget] Original viz spec:', originalViz);
 
-      // Transform the viz spec to fix formatting issues
-      const transformedViz = transformVizSpec(originalViz);
+      // Extract current value from metric specification for humidity monitoring
+      const currentValue = data.metric?.specification?.value;
+      console.log('[Pulse Widget] Current metric value:', currentValue);
+      console.log('[Pulse Widget] Definition ID:', data.definitionId);
+
+      // Transform the viz spec to fix formatting issues and add humidity indicators
+      const transformedViz = transformVizSpec(originalViz, data.definitionId, currentValue);
       console.log('[Pulse Widget] Transformed viz spec:', transformedViz);
 
       // Render Vega-Lite visualization
@@ -259,12 +365,34 @@ export default function App() {
 
   const textInsights = allInsights.filter((insight) => insight.result?.markup);
 
+  // Check humidity status for special metric
+  const currentValue = data.metric?.specification?.value;
+  const humidityStatus = getHumidityStatus(data.definitionId, currentValue);
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>{data.metric.name || 'Pulse Metric'}</h1>
         {data.metric.description && <p style={styles.description}>{data.metric.description}</p>}
       </div>
+
+      {/* Humidity Alert Badge (for backyard pine tree metric) */}
+      {humidityStatus && (
+        <div
+          style={{
+            ...styles.alertBadge,
+            backgroundColor: humidityStatus.color + '20',
+            borderColor: humidityStatus.color,
+            color: humidityStatus.color,
+          }}
+        >
+          <strong>{humidityStatus.message}</strong>
+          <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.9 }}>
+            Current: {currentValue}% | Optimal: {HUMIDITY_METRIC_CONFIG.minThreshold}-
+            {HUMIDITY_METRIC_CONFIG.maxThreshold}%
+          </div>
+        </div>
+      )}
 
       <div id="visualization" style={styles.visualization} />
 
@@ -336,5 +464,14 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '6px',
     color: '#991b1b',
     margin: '16px',
+  },
+  alertBadge: {
+    padding: '12px 16px',
+    marginBottom: '16px',
+    borderRadius: '8px',
+    border: '2px solid',
+    fontSize: '14px',
+    lineHeight: 1.5,
+    fontWeight: 500,
   },
 };
