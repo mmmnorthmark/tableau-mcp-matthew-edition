@@ -97,6 +97,23 @@ This tool is designed specifically for OpenAI Apps SDK integration and provides 
 
               log.info(server, `[renderPulseMetric] Using definition_id: ${defId}`, { requestId });
 
+              // Validate required fields before building bundle request
+              if (!definition.extension_options) {
+                throw new Error('Metric definition is missing extension_options');
+              }
+              if (!definition.representation_options) {
+                throw new Error('Metric definition is missing representation_options');
+              }
+              if (!definition.specification.datasource) {
+                throw new Error('Metric definition is missing specification.datasource');
+              }
+              if (!definition.specification.basic_specification) {
+                throw new Error('Metric definition is missing specification.basic_specification');
+              }
+              if (!metric.specification) {
+                throw new Error('Metric is missing specification');
+              }
+
               // Build insight bundle request
               const bundleRequest = {
                 bundle_request: {
