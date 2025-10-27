@@ -174,14 +174,32 @@ This tool is designed specifically for OpenAI Apps SDK integration and provides 
               );
 
               // Generate insight bundle with Vega-Lite specs
+              log.info(
+                server,
+                `[renderPulseMetric] Calling generatePulseMetricValueInsightBundle with bundleType: detail`,
+                { requestId },
+              );
+
               const bundleResult = await restApi.pulseMethods.generatePulseMetricValueInsightBundle(
                 bundleRequest,
                 'detail',
               );
 
               if (bundleResult.isErr()) {
-                throw new Error('Failed to generate insight bundle');
+                const errorType = bundleResult.error;
+                log.error(
+                  server,
+                  `[renderPulseMetric] Failed to generate insight bundle: ${errorType}`,
+                  { requestId },
+                );
+                throw new Error(`Failed to generate insight bundle: ${errorType}`);
               }
+
+              log.info(
+                server,
+                `[renderPulseMetric] Successfully generated insight bundle`,
+                { requestId },
+              );
 
               const insightBundle = bundleResult.value;
 

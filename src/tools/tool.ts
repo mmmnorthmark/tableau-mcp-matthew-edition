@@ -191,6 +191,23 @@ export class Tool<Args extends ZodRawShape | undefined = undefined> {
 }
 
 function getErrorResult(requestId: RequestId, error: unknown): CallToolResult {
+  // Log the error details to console for debugging
+  console.error(`[Tool Error] requestId: ${requestId}`);
+  console.error(`[Tool Error] Error type: ${error?.constructor?.name || typeof error}`);
+  console.error(`[Tool Error] Error message: ${getExceptionMessage(error)}`);
+
+  if (error instanceof Error && error.stack) {
+    console.error(`[Tool Error] Stack trace:\n${error.stack}`);
+  }
+
+  if (error instanceof ZodiosError) {
+    console.error(`[Tool Error] Zodios error details:`, {
+      status: error.status,
+      cause: error.cause,
+      data: JSON.stringify(error.data, null, 2),
+    });
+  }
+
   if (error instanceof ZodiosError && isZodErrorLike(error.cause)) {
     // Schema validation errors on otherwise successful API calls will not return an "error" result to the MCP client.
     // We instead return the full response from the API with a data quality warning message
@@ -199,6 +216,8 @@ function getErrorResult(requestId: RequestId, error: unknown): CallToolResult {
     // The only con is that the full response from the API might be larger than normal
     // since a successful schema validation "trims" the response down to the shape of the schema.
     const validationError = fromError(error.cause);
+    console.error(`[Tool Error] Validation error: ${validationError.toString()}`);
+
     return {
       isError: false,
       content: [

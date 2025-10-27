@@ -9,9 +9,11 @@ import { writeToStderr } from './log.js';
 export class ServerLogger {
   private readonly _logDirectory: string;
   private readonly _fileMutexes = new Map<string, Promise<void>>();
+  private readonly _consoleOutput: boolean;
 
-  constructor({ logDirectory }: { logDirectory: string }) {
+  constructor({ logDirectory, consoleOutput = true }: { logDirectory: string; consoleOutput?: boolean }) {
     this._logDirectory = logDirectory;
+    this._consoleOutput = consoleOutput;
 
     if (!existsSync(this._logDirectory)) {
       mkdirSync(this._logDirectory, { recursive: true });
@@ -23,6 +25,26 @@ export class ServerLogger {
     const timestamp = new Date().toISOString();
     const filename = `${new Date(new Date().setMinutes(0, 0, 0)).toISOString().replace(/[:.]/g, '-')}.log`;
     const logFilePath = join(this._logDirectory, filename);
+
+    // Also output to console if enabled
+    if (this._consoleOutput) {
+      const logEntry = { timestamp, ...obj };
+      const level = (obj.level as string) || 'info';
+
+      // Format console output for readability
+      const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
+
+      if (typeof obj.message === 'string') {
+        // Simple string message
+        console.error(`${prefix} ${obj.message}`);
+      } else if (obj.message && typeof obj.message === 'object') {
+        // Structured message object
+        console.error(`${prefix} ${JSON.stringify(obj.message, null, 2)}`);
+      } else {
+        // Full log entry
+        console.error(`${prefix} ${JSON.stringify(logEntry, null, 2)}`);
+      }
+    }
 
     // Get or create a mutex for this specific log file
     const mutexKey = logFilePath;
