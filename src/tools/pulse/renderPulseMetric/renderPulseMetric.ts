@@ -115,6 +115,12 @@ This tool is designed specifically for OpenAI Apps SDK integration and provides 
               }
 
               // Build insight bundle request
+              // Ensure representation_options has all required fields
+              const representation_options = {
+                ...definition.representation_options,
+                sentiment_type: definition.representation_options.sentiment_type || 'SENTIMENT_TYPE_UNSPECIFIED',
+              };
+
               const bundleRequest = {
                 bundle_request: {
                   version: 1,
@@ -138,7 +144,7 @@ This tool is designed specifically for OpenAI Apps SDK integration and provides 
                       },
                       metric_specification: metric.specification,
                       extension_options: definition.extension_options,
-                      representation_options: definition.representation_options,
+                      representation_options,
                       insights_options: definition.insights_options || {
                         show_insights: true,
                         settings: [],
@@ -152,6 +158,18 @@ This tool is designed specifically for OpenAI Apps SDK integration and provides 
               log.info(
                 server,
                 `[renderPulseMetric] Bundle request metadata: ${JSON.stringify(bundleRequest.bundle_request.input.metadata)}`,
+                { requestId },
+              );
+
+              // Debug: Log the full bundleRequest structure
+              log.info(
+                server,
+                `[renderPulseMetric] Full bundleRequest keys: ${JSON.stringify(Object.keys(bundleRequest))}`,
+                { requestId },
+              );
+              log.info(
+                server,
+                `[renderPulseMetric] bundleRequest.bundle_request exists: ${!!bundleRequest.bundle_request}`,
                 { requestId },
               );
 
