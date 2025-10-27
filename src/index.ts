@@ -14,8 +14,13 @@ async function startServer(): Promise<void> {
   const config = getConfig();
 
   const logLevel = isLoggingLevel(config.defaultLogLevel) ? config.defaultLogLevel : 'debug';
+
+  // Enable server logging with console output
   if (config.enableServerLogging) {
-    setServerLogger(new ServerLogger({ logDirectory: config.serverLogDirectory }));
+    setServerLogger(new ServerLogger({
+      logDirectory: config.serverLogDirectory,
+      consoleOutput: true, // Always output to console for debugging
+    }));
   }
 
   switch (config.transport) {
