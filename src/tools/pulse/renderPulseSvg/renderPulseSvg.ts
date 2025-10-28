@@ -182,7 +182,18 @@ An SVG string that can be saved to a file or embedded in HTML.
         }),
         callback: async () => {
           // Parse the Vega-Lite spec
-          const spec = JSON.parse(vegaLiteSpec);
+          let spec = JSON.parse(vegaLiteSpec);
+
+          // Handle wrapped specs (e.g., {"ban_chart": {...}})
+          // If the parsed object has exactly one key and it's not a Vega-Lite root property,
+          // unwrap it
+          const vegaLiteRootProps = ['$schema', 'mark', 'layer', 'facet', 'hconcat', 'vconcat', 'concat', 'repeat', 'data', 'encoding'];
+          const keys = Object.keys(spec);
+
+          if (keys.length === 1 && !vegaLiteRootProps.includes(keys[0])) {
+            // Unwrap the spec
+            spec = spec[keys[0]];
+          }
 
           // Render to SVG
           const svg = await renderVegaLiteToSvg(spec, width || 800, height || 400);
