@@ -111,6 +111,19 @@ async function renderVegaLiteToSvg(
   transformedSpec.width = width;
   transformedSpec.height = height;
 
+  // Add autosize configuration to fit content properly with padding
+  if (!transformedSpec.autosize) {
+    transformedSpec.autosize = {
+      type: 'fit',
+      contains: 'padding',
+    };
+  }
+
+  // Ensure padding is set to prevent label cropping
+  if (!transformedSpec.padding) {
+    transformedSpec.padding = { left: 10, right: 10, top: 10, bottom: 10 };
+  }
+
   // Compile Vega-Lite to Vega
   const vegaSpec = vegaLite.compile(transformedSpec).spec;
 
