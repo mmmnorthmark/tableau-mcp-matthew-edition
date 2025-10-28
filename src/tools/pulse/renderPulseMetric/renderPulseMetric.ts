@@ -60,6 +60,7 @@ This tool is designed specifically for OpenAI Apps SDK integration and provides 
       return await renderPulseMetricTool.logAndExecute({
         requestId,
         args: { metricId, definitionId },
+        getSuccessResult: (result) => result,
         callback: async () => {
           return await useRestApi({
             config,
