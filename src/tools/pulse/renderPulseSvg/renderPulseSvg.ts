@@ -1,17 +1,29 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { Canvas } from 'canvas';
 import { Ok } from 'ts-results-es';
 import * as vega from 'vega';
 import * as vegaLite from 'vega-lite';
 import z from 'zod';
 
+import { getConfig } from '../../../config.js';
+import { log } from '../../../logging/log.js';
+import { useRestApi } from '../../../restApiInstance.js';
 import { Server } from '../../../server.js';
 import { Tool } from '../../tool.js';
+import { getPulseDisabledError } from '../getPulseDisabledError.js';
 
 const paramsSchema = {
-  vegaLiteSpec: z
+  metricId: z.string().describe('The ID of the Pulse metric to render'),
+  definitionId: z
     .string()
-    .describe('The Vega-Lite specification as a JSON string'),
+    .optional()
+    .describe('The ID of the Pulse metric definition (optional, will be fetched if not provided)'),
+  insightType: z
+    .enum(['popc', 'currenttrend', 'unusualchange', 'topcontributor', 'all'])
+    .optional()
+    .default('all')
+    .describe(
+      'The type of insight visualization to render: popc (period-over-period comparison/BAN), currenttrend (time series), unusualchange (anomaly detection), topcontributor (breakdown), or all (default: all)',
+    ),
   width: z
     .number()
     .optional()
@@ -147,72 +159,208 @@ export const getRenderPulseSvgTool = (server: Server): Tool<typeof paramsSchema>
     server,
     name: 'render-pulse-svg',
     description: `
-Render a Tableau Pulse Vega-Lite specification to SVG format.
+Render Tableau Pulse metric visualizations to SVG format.
 
-This tool takes a Vega-Lite specification (including those with Tableau Pulse custom formatters)
-and renders it to an SVG string. It handles custom formatter maps by converting them to
-Vega-native labelExpr expressions.
+This tool fetches a Pulse metric's insight bundle and renders the specified visualization type(s)
+to SVG. It automatically handles Tableau Pulse's custom formatters and returns one or more SVG strings.
 
 **Parameters:**
-- \`vegaLiteSpec\` (required): The Vega-Lite specification as a JSON string
+- \`metricId\` (required): The ID of the Pulse metric to render
+- \`definitionId\` (optional): The ID of the Pulse metric definition
+- \`insightType\` (optional): Type of visualization to render (default: 'all')
+  - \`popc\`: Period-over-period comparison (BAN chart)
+  - \`currenttrend\`: Time series chart
+  - \`unusualchange\`: Anomaly detection chart
+  - \`topcontributor\`: Breakdown/contributor chart
+  - \`all\`: All available visualizations
 - \`width\` (optional): Width of the SVG output in pixels (default: 800)
 - \`height\` (optional): Height of the SVG output in pixels (default: 400)
 
 **Example Usage:**
 \`\`\`json
 {
-  "vegaLiteSpec": "{\\"$schema\\": \\"https://vega.github.io/schema/vega-lite/v5.json\\", ...}",
+  "metricId": "CF32DDCC-362B-4869-9487-37DA4D152552",
+  "insightType": "currenttrend",
   "width": 1200,
   "height": 600
 }
 \`\`\`
 
 **Returns:**
-An SVG string that can be saved to a file or embedded in HTML.
+A JSON object with an array of SVG strings, each labeled with its insight type.
 
 **Note:**
-- This tool automatically handles Tableau Pulse's customFormatterMaps
-- Supports all standard Vega-Lite visualizations
+- Automatically transforms customFormatterMaps to Vega-native labelExpr
 - Renders headlessly (no browser required)
+- Returns multiple SVGs if insightType is 'all' or if multiple insights of the same type exist
 `,
     paramsSchema,
     annotations: {
       readOnlyHint: true,
       openWorldHint: false,
     },
-    callback: async ({ vegaLiteSpec, width, height }, { requestId }): Promise<CallToolResult> => {
+    callback: async (
+      { metricId, definitionId, insightType, width, height },
+      { requestId },
+    ): Promise<CallToolResult> => {
+      const config = getConfig();
       return await renderPulseSvgTool.logAndExecute({
         requestId,
-        args: { vegaLiteSpec, width, height },
-        getSuccessResult: (svg) => ({
+        args: { metricId, definitionId, insightType, width, height },
+        getSuccessResult: (result) => ({
           isError: false,
           content: [
             {
               type: 'text',
-              text: svg,
+              text: JSON.stringify(result, null, 2),
             },
           ],
         }),
         callback: async () => {
-          // Parse the Vega-Lite spec
-          let spec = JSON.parse(vegaLiteSpec);
+          return await useRestApi({
+            config,
+            requestId,
+            server,
+            jwtScopes: [
+              'tableau:insight_metrics:read',
+              'tableau:insight_definitions_metrics:read',
+              'tableau:insights:read',
+            ],
+            callback: async (restApi) => {
+              // Fetch metric data
+              const metricsResult = await restApi.pulseMethods.listPulseMetricsFromMetricIds([
+                metricId,
+              ]);
 
-          // Handle wrapped specs (e.g., {"ban_chart": {...}})
-          // If the parsed object has exactly one key and it's not a Vega-Lite root property,
-          // unwrap it
-          const vegaLiteRootProps = ['$schema', 'mark', 'layer', 'facet', 'hconcat', 'vconcat', 'concat', 'repeat', 'data', 'encoding'];
-          const keys = Object.keys(spec);
+              if (metricsResult.isErr() || metricsResult.value.length === 0) {
+                throw new Error(`Metric not found: ${metricId}`);
+              }
 
-          if (keys.length === 1 && !vegaLiteRootProps.includes(keys[0])) {
-            // Unwrap the spec
-            spec = spec[keys[0]];
-          }
+              const metric = metricsResult.value[0];
+              const defId = definitionId || metric.definition_id;
 
-          // Render to SVG
-          const svg = await renderVegaLiteToSvg(spec, width || 800, height || 400);
+              // Fetch metric definition
+              const definitionsResult =
+                await restApi.pulseMethods.listPulseMetricDefinitionsFromMetricDefinitionIds([
+                  defId,
+                ]);
 
-          return new Ok(svg);
+              if (definitionsResult.isErr() || definitionsResult.value.length === 0) {
+                throw new Error(`Metric definition not found: ${defId}`);
+              }
+
+              const definition = definitionsResult.value[0];
+
+              // Build insight bundle request (same as renderPulseMetric)
+              const representation_options = {
+                ...definition.representation_options,
+                sentiment_type:
+                  definition.representation_options.sentiment_type || 'SENTIMENT_TYPE_UNSPECIFIED',
+              };
+
+              const bundleRequest = {
+                bundle_request: {
+                  version: 1,
+                  options: {
+                    output_format: 'OUTPUT_FORMAT_HTML' as const,
+                    time_zone: 'UTC',
+                    language: 'LANGUAGE_EN_US' as const,
+                    locale: 'LOCALE_EN_US' as const,
+                  },
+                  input: {
+                    metadata: {
+                      name: definition.metadata?.name || 'Pulse Metric',
+                      metric_id: metric.id,
+                      definition_id: defId,
+                    },
+                    metric: {
+                      definition: {
+                        datasource: definition.specification.datasource,
+                        basic_specification: definition.specification.basic_specification,
+                        is_running_total: definition.specification.is_running_total,
+                      },
+                      metric_specification: metric.specification,
+                      extension_options: definition.extension_options,
+                      representation_options,
+                      insights_options: definition.insights_options || {
+                        show_insights: true,
+                        settings: [],
+                      },
+                      goals: metric.goals || {},
+                    },
+                  },
+                },
+              };
+
+              // Generate insight bundle with Vega-Lite specs
+              const bundleResult = await restApi.pulseMethods.generatePulseMetricValueInsightBundle(
+                bundleRequest,
+                'detail',
+              );
+
+              if (bundleResult.isErr()) {
+                throw new Error(`Failed to generate insight bundle: ${bundleResult.error}`);
+              }
+
+              const insightBundle = bundleResult.value;
+
+              if (!insightBundle.bundle_response) {
+                throw new Error('Invalid response from Pulse API: missing bundle_response');
+              }
+
+              // Extract insights with visualizations
+              const allInsights: Array<{ type: string; viz: any }> = [];
+              insightBundle.bundle_response.result.insight_groups.forEach((group) => {
+                if (group.insights) {
+                  group.insights.forEach((insight) => {
+                    if (insight.result?.viz && insight.insight_type) {
+                      allInsights.push({
+                        type: insight.insight_type,
+                        viz: insight.result.viz,
+                      });
+                    }
+                  });
+                }
+              });
+
+              log.info(
+                server,
+                `[renderPulseSvg] Found ${allInsights.length} insights with visualizations`,
+                { requestId },
+              );
+
+              // Filter by insight type
+              const insightsToRender =
+                insightType === 'all'
+                  ? allInsights
+                  : allInsights.filter((insight) => insight.type === insightType);
+
+              if (insightsToRender.length === 0) {
+                throw new Error(
+                  `No visualizations found for insight type: ${insightType}. Available types: ${[...new Set(allInsights.map((i) => i.type))].join(', ')}`,
+                );
+              }
+
+              // Render each visualization to SVG
+              const svgs = await Promise.all(
+                insightsToRender.map(async (insight) => {
+                  const svg = await renderVegaLiteToSvg(insight.viz, width || 800, height || 400);
+                  return {
+                    insightType: insight.type,
+                    svg,
+                  };
+                }),
+              );
+
+              return new Ok({
+                metricId: metric.id,
+                metricName: definition.metadata?.name,
+                visualizations: svgs,
+              });
+            },
+          });
         },
+        getErrorText: getPulseDisabledError,
       });
     },
   });
