@@ -8,6 +8,7 @@ import { getListPulseMetricsFromMetricDefinitionIdTool } from './pulse/listMetri
 import { getListPulseMetricsFromMetricIdsTool } from './pulse/listMetricsFromMetricIds/listPulseMetricsFromMetricIds.js';
 import { getListPulseMetricSubscriptionsTool } from './pulse/listMetricSubscriptions/listPulseMetricSubscriptions.js';
 import { getRenderPulseMetricTool } from './pulse/renderPulseMetric/renderPulseMetric.js';
+import { getRenderPulseSvgTool } from './pulse/renderPulseSvg/renderPulseSvg.js';
 import { getQueryDatasourceTool } from './queryDatasource/queryDatasource.js';
 import { getGetViewDataTool } from './views/getViewData.js';
 import { getGetViewImageTool } from './views/getViewImage.js';
@@ -26,6 +27,7 @@ export const toolFactories = [
   getListPulseMetricSubscriptionsTool,
   getGeneratePulseMetricValueInsightBundleTool,
   getRenderPulseMetricTool,
+  getRenderPulseSvgTool,
   getGetWorkbookTool,
   getGetViewDataTool,
   getGetViewImageTool,
