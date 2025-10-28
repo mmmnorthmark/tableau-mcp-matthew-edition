@@ -308,14 +308,39 @@ A JSON object with an array of SVG strings, each labeled with its insight type.
                 throw new Error('Invalid response from Pulse API: missing bundle_response');
               }
 
+              // Log insight groups for debugging
+              log.info(
+                server,
+                `[renderPulseSvg] Processing ${insightBundle.bundle_response.result.insight_groups.length} insight groups`,
+                { requestId },
+              );
+
               // Extract insights with visualizations
-              const allInsights: Array<{ type: string; viz: any }> = [];
-              insightBundle.bundle_response.result.insight_groups.forEach((group) => {
+              const allInsights: Array<{ type: string; groupType: string; viz: any }> = [];
+              insightBundle.bundle_response.result.insight_groups.forEach((group, groupIdx) => {
+                log.info(
+                  server,
+                  `[renderPulseSvg] Group ${groupIdx}: type="${group.type}", insights=${group.insights?.length || 0}`,
+                  { requestId },
+                );
+
                 if (group.insights) {
-                  group.insights.forEach((insight) => {
-                    if (insight.result?.viz && insight.insight_type) {
+                  group.insights.forEach((insight, insightIdx) => {
+                    const hasViz = !!insight.result?.viz;
+                    const vizIsObject = hasViz && typeof insight.result.viz === 'object' && insight.result.viz !== null;
+                    const vizKeys = vizIsObject ? Object.keys(insight.result.viz).length : 0;
+
+                    log.info(
+                      server,
+                      `[renderPulseSvg] Group ${groupIdx} Insight ${insightIdx}: type="${insight.insight_type}", result.type="${insight.result?.type}", hasViz=${hasViz}, vizIsObject=${vizIsObject}, vizKeys=${vizKeys}`,
+                      { requestId },
+                    );
+
+                    // Only include insights with non-empty viz objects
+                    if (insight.result?.viz && insight.insight_type && vizIsObject && vizKeys > 0) {
                       allInsights.push({
                         type: insight.insight_type,
+                        groupType: group.type,
                         viz: insight.result.viz,
                       });
                     }
@@ -325,7 +350,7 @@ A JSON object with an array of SVG strings, each labeled with its insight type.
 
               log.info(
                 server,
-                `[renderPulseSvg] Found ${allInsights.length} insights with visualizations`,
+                `[renderPulseSvg] Found ${allInsights.length} insights with visualizations: ${allInsights.map(i => `${i.type}(${i.groupType})`).join(', ')}`,
                 { requestId },
               );
 
