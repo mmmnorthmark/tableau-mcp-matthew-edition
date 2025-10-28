@@ -71,11 +71,12 @@ function transformVizSpec(vizSpec: any): any {
     }
   }
 
-  // Transform all layers in the spec
+  // Transform top-level encoding first (this is where x/y axes are defined)
+  transformLayer(transformed);
+
+  // Then transform all child layers
   if (transformed.layer && Array.isArray(transformed.layer)) {
     transformed.layer.forEach(transformLayer);
-  } else {
-    transformLayer(transformed);
   }
 
   return transformed;
