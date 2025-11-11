@@ -37,6 +37,12 @@ export class Config {
   disableMetadataApiRequests: boolean;
   enableServerLogging: boolean;
   serverLogDirectory: string;
+  assetStrategy: 'disabled' | 'inline' | 'local' | 's3';
+  assetSecretKey: string;
+  assetCorsOrigins: string[];
+  assetStoragePath: string;
+  assetExpirationHours: number;
+  mcpServerUrl: string;
 
   constructor() {
     const cleansedVars = removeClaudeMcpBundleUserConfigTemplates(process.env);
@@ -66,6 +72,11 @@ export class Config {
       DISABLE_METADATA_API_REQUESTS: disableMetadataApiRequests,
       ENABLE_SERVER_LOGGING: enableServerLogging,
       SERVER_LOG_DIRECTORY: serverLogDirectory,
+      MCP_ASSET_STRATEGY: assetStrategy,
+      MCP_ASSET_SECRET_KEY: assetSecretKey,
+      MCP_ASSET_CORS_ORIGINS: assetCorsOrigins,
+      MCP_ASSET_STORAGE_PATH: assetStoragePath,
+      MCP_ASSET_EXPIRATION_HOURS: assetExpirationHours,
     } = cleansedVars;
 
     const defaultPort = 3927;
@@ -86,6 +97,16 @@ export class Config {
     this.disableMetadataApiRequests = disableMetadataApiRequests === 'true';
     this.enableServerLogging = enableServerLogging === 'true';
     this.serverLogDirectory = serverLogDirectory || join(__dirname, 'logs');
+
+    // Asset serving configuration
+    const validStrategies = ['disabled', 'inline', 'local', 's3'] as const;
+    this.assetStrategy = validStrategies.includes(assetStrategy as any)
+      ? (assetStrategy as 'disabled' | 'inline' | 'local' | 's3')
+      : 'disabled';
+
+    this.assetStoragePath = assetStoragePath?.trim() || join(__dirname, '..', 'assets');
+    const expirationHours = assetExpirationHours ? parseInt(assetExpirationHours) : NaN;
+    this.assetExpirationHours = isNaN(expirationHours) || expirationHours <= 0 ? 24 : expirationHours;
 
     const maxResultLimitNumber = maxResultLimit ? parseInt(maxResultLimit) : NaN;
     this.maxResultLimit =
@@ -111,6 +132,35 @@ export class Config {
 
     invariant(server, 'The environment variable SERVER is not set');
     validateServer(server);
+
+    // Construct MCP server URL from HTTP port
+    this.mcpServerUrl = `http://localhost:${this.httpPort}`;
+
+    // Validate required asset serving configuration based on strategy
+    // Only 'disabled' and 'inline' strategies work without secret key and CORS origins
+    const requiresSecretKey = this.assetStrategy !== 'disabled' && this.assetStrategy !== 'inline';
+
+    if (requiresSecretKey) {
+      // Strategies that generate signed URLs ('local', 's3') require secret key
+      invariant(
+        assetSecretKey?.trim(),
+        `The environment variable MCP_ASSET_SECRET_KEY is required when MCP_ASSET_STRATEGY="${this.assetStrategy}". ` +
+        `Only "disabled" and "inline" strategies work without a secret key.`
+      );
+      invariant(
+        assetCorsOrigins?.trim(),
+        `The environment variable MCP_ASSET_CORS_ORIGINS is required when MCP_ASSET_STRATEGY="${this.assetStrategy}". ` +
+        `Only "disabled" and "inline" strategies work without CORS configuration.`
+      );
+
+      // Parse CORS origins and set secret key
+      this.assetCorsOrigins = assetCorsOrigins.split(',').map(origin => origin.trim());
+      this.assetSecretKey = assetSecretKey.trim();
+    } else {
+      // For 'disabled' and 'inline' strategies, secret key and CORS are optional
+      this.assetCorsOrigins = assetCorsOrigins ? assetCorsOrigins.split(',').map(origin => origin.trim()) : [];
+      this.assetSecretKey = assetSecretKey?.trim() || '';
+    }
 
     if (this.auth === 'pat') {
       invariant(patName, 'The environment variable PAT_NAME is not set');

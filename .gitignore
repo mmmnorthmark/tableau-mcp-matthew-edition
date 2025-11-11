@@ -14,3 +14,8 @@ tableau-mcp.dxt
 tableau-mcp.mcpb
 *.pem
 *.tgz
+
+# Ignore generated assets (SVG files, JSON metadata), but keep the assets folder structure
+assets/*
+!assets/.gitkeep
+!assets/widget/

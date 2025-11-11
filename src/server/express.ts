@@ -9,6 +9,7 @@ import https from 'https';
 import { Config } from '../config.js';
 import { setLogLevel } from '../logging/log.js';
 import { Server } from '../server.js';
+import { handleAssetRequest, handleDefaultsRequest } from './assetRoutes.js';
 
 export async function startExpressServer({
   basePath,
@@ -43,6 +44,19 @@ export async function startExpressServer({
   app.post(path, createMcpServer);
   app.get(path, methodNotAllowed);
   app.delete(path, methodNotAllowed);
+
+  // Asset serving endpoints with strict CORS
+  const assetCors = cors({
+    origin: config.assetCorsOrigins.length > 0 ? config.assetCorsOrigins : false,
+    credentials: false,
+    methods: ['GET'],
+  });
+
+  app.get('/mcp/assets', assetCors, (req: Request, res: Response) =>
+    handleAssetRequest(req, res, config),
+  );
+
+  app.get('/defaults/:filename', assetCors, handleDefaultsRequest);
 
   const useSsl = !!(config.sslKey && config.sslCert);
   if (!useSsl) {
