@@ -650,7 +650,7 @@ async function renderVegaSpec(vegaSpec: any): Promise<{
 /**
  * Render a Vega-Lite spec to SVG using headless canvas rendering.
  */
-async function renderVegaLiteToSvg(
+export async function renderVegaLiteToSvg(
   vegaLiteSpec: any,
   width: number,
   height: number,

@@ -6,8 +6,10 @@ import { getConfig } from '../../../config.js';
 import { log } from '../../../logging/log.js';
 import { useRestApi } from '../../../restApiInstance.js';
 import { Server } from '../../../server.js';
+import { AssetManager } from '../../../services/AssetManager.js';
 import { Tool } from '../../tool.js';
 import { getPulseDisabledError } from '../getPulseDisabledError.js';
+import { renderVegaLiteToSvg } from '../renderPulseSvg/renderPulseSvg.js';
 import { createPulseWidgetMeta, PULSE_WIDGET_URI } from './widgetMeta.js';
 
 const paramsSchema = {
@@ -29,6 +31,7 @@ This tool fetches metric data and generates a widget that displays:
 1. Metric name, description, and current value
 2. Interactive Vega-Lite visualizations
 3. AI-generated insights about the metric
+4. SVG visualization URLs (when asset strategy is 'local' or 's3')
 
 **Parameters:**
 - \`metricId\` (required): The ID of the Pulse metric to render
@@ -44,6 +47,10 @@ This tool fetches metric data and generates a widget that displays:
 
 **Returns:**
 A widget that displays the Pulse metric with visualizations and insights. The widget is optimized for OpenAI Apps SDK environments.
+
+When MCP_ASSET_STRATEGY is 'local' or 's3', the response also includes:
+- \`visualizationUrls\`: Array of signed URLs to SVG visualizations that can be embedded in markdown
+- Example markdown: \`![Metric Visualization](https://mcp-server/tableau-mcp/assets?assetId=...)\`
 
 **Note:**
 This tool is designed specifically for OpenAI Apps SDK integration and provides an interactive widget experience.
@@ -214,12 +221,87 @@ This tool is designed specifically for OpenAI Apps SDK integration and provides 
                 throw new Error('Invalid response from Pulse API: missing bundle_response');
               }
 
+              // Render SVG visualizations if asset strategy is 'local' or 's3'
+              let visualizationUrls: Array<{ insightType: string; url: string }> = [];
+
+              if (config.assetStrategy === 'local' || config.assetStrategy === 's3') {
+                log.info(
+                  server,
+                  `[renderPulseMetric] Rendering SVG visualizations with asset strategy: ${config.assetStrategy}`,
+                  { requestId },
+                );
+
+                // Extract insights with visualizations
+                const allInsights: Array<{ type: string; viz: any }> = [];
+                insightBundle.bundle_response.result.insight_groups.forEach((group) => {
+                  if (group.insights) {
+                    group.insights.forEach((insight) => {
+                      if (insight.result?.viz && insight.insight_type) {
+                        const vizIsObject = typeof insight.result.viz === 'object' && insight.result.viz !== null;
+                        const vizKeys = vizIsObject ? Object.keys(insight.result.viz).length : 0;
+
+                        if (vizIsObject && vizKeys > 0) {
+                          allInsights.push({
+                            type: insight.insight_type,
+                            viz: insight.result.viz,
+                          });
+                        }
+                      }
+                    });
+                  }
+                });
+
+                log.info(
+                  server,
+                  `[renderPulseMetric] Found ${allInsights.length} insights with visualizations`,
+                  { requestId },
+                );
+
+                // Render each visualization to SVG and store
+                const assetManager = new AssetManager(config, server);
+                visualizationUrls = await Promise.all(
+                  allInsights.map(async (insight, index) => {
+                    const svg = await renderVegaLiteToSvg(insight.viz, 800, 400);
+                    const svgBuffer = Buffer.from(svg, 'utf-8');
+                    const filename = `${definition.metadata?.name || 'pulse-metric'}-${insight.type}-${index + 1}.svg`;
+
+                    const { url } = await assetManager.store(svgBuffer, 'svg', {
+                      imageFilename: filename,
+                      metricId: metric.id,
+                      metricName: definition.metadata?.name,
+                      insightType: insight.type,
+                    });
+
+                    return {
+                      insightType: insight.type,
+                      url,
+                    };
+                  }),
+                );
+
+                log.info(
+                  server,
+                  `[renderPulseMetric] Generated ${visualizationUrls.length} SVG visualization URLs`,
+                  { requestId },
+                );
+              }
+
+              // Build response text with optional SVG URLs
+              let responseText = `Rendered Tableau Pulse metric: ${definition.metadata?.name || metricId}`;
+              if (visualizationUrls.length > 0) {
+                responseText += `\n\n**Visualization URLs:**\n`;
+                visualizationUrls.forEach((viz) => {
+                  responseText += `- ${viz.insightType}: ${viz.url}\n`;
+                });
+                responseText += `\nYou can embed these in markdown using: \`![${definition.metadata?.name}](${visualizationUrls[0].url})\``;
+              }
+
               // Return response with _meta and structuredContent
               return new Ok({
                 content: [
                   {
                     type: 'text',
-                    text: `Rendered Tableau Pulse metric: ${definition.metadata?.name || metricId}`,
+                    text: responseText,
                   },
                 ],
                 structuredContent: {
@@ -234,6 +316,7 @@ This tool is designed specifically for OpenAI Apps SDK integration and provides 
                     representation_options: definition.representation_options,
                   },
                   insightBundle: insightBundle.bundle_response,
+                  ...(visualizationUrls.length > 0 && { visualizationUrls }),
                 },
                 _meta: createPulseWidgetMeta(),
               });

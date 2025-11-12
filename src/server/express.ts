@@ -52,11 +52,11 @@ export async function startExpressServer({
     methods: ['GET'],
   });
 
-  app.get('/mcp/assets', assetCors, (req: Request, res: Response) =>
+  app.get(`/${basePath}/assets`, assetCors, (req: Request, res: Response) =>
     handleAssetRequest(req, res, config),
   );
 
-  app.get('/defaults/:filename', assetCors, handleDefaultsRequest);
+  app.get(`/${basePath}/defaults/:filename`, assetCors, handleDefaultsRequest);
 
   const useSsl = !!(config.sslKey && config.sslCert);
   if (!useSsl) {
