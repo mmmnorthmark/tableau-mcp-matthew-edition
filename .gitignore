@@ -8,6 +8,11 @@ junit/
 coverage/
 test-logs/
 config.json
+
+# Ignore all dot folders (IDE settings, cache, etc.) except .github
+.*
+!.gitignore
+!.github/
 env.list
 manifest.json
 tableau-mcp.dxt
