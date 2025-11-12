@@ -8,12 +8,16 @@ junit/
 coverage/
 test-logs/
 config.json
-
-# Ignore all dot folders (IDE settings, cache, etc.) except .github
-.*
-!.gitignore
-!.github/
 env.list
+
+# Ignore user-specific IDE settings and cache folders
+.idea/
+.DS_Store
+.claude/
+
+# Keep shared IDE configs that help contributors:
+# .vscode/ - Contains recommended extensions and launch configs
+# .github/ - Contains workflows and templates
 manifest.json
 tableau-mcp.dxt
 tableau-mcp.mcpb
