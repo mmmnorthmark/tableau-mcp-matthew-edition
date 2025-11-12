@@ -359,3 +359,58 @@ export type PulseMetricDefinitionView = (typeof pulseMetricDefinitionViewEnum)[n
 export type PulseMetricDefinition = z.infer<typeof pulseMetricDefinitionSchema>;
 export type PulseMetric = z.infer<typeof pulseMetricSchema>;
 export type PulseMetricSubscription = z.infer<typeof pulseMetricSubscriptionSchema>;
+
+// Pulse Discover Brief types
+export const pulseInsightResultSchema = z.object({
+  type: z.string(),
+  question: z.string().optional(),
+  markup: z.string(),
+  viz: z.any().optional(),
+  facts: z.any().optional(),
+});
+
+export const pulseSpringboardBundleInputSchema = z.object({
+  metadata: z.object({
+    name: z.string(),
+    metric_id: z.string(),
+    definition_id: z.string(),
+  }),
+  metric: z.object({
+    definition: z.any(),
+    metric_specification: z.any(),
+    representation_options: z.any(),
+    extension_options: z.any(),
+    insights_options: z.any(),
+    goals: z.any().optional(),
+    candidates: z.array(z.any()).optional(),
+  }),
+});
+
+export const pulseDiscoverBriefSchema = z.object({
+  markup: z.string(),
+  follow_up_questions: z.array(
+    z.object({
+      content: z.string(),
+    }),
+  ),
+  source_insights: z.array(pulseInsightResultSchema),
+  group_context: z.array(pulseSpringboardBundleInputSchema),
+});
+
+// Followed Metrics Groups types
+export const pulseMetricGroupSchema = z.object({
+  group_metadata: z.record(z.string()),
+  metrics: z.array(pulseMetricSchema),
+});
+
+export const pulseFollowedMetricsGroupsResponseSchema = z.object({
+  metric_groups: z.array(pulseMetricGroupSchema),
+});
+
+export type PulseDiscoverBrief = z.infer<typeof pulseDiscoverBriefSchema>;
+export type PulseInsightResult = z.infer<typeof pulseInsightResultSchema>;
+export type PulseSpringboardBundleInput = z.infer<typeof pulseSpringboardBundleInputSchema>;
+export type PulseMetricGroup = z.infer<typeof pulseMetricGroupSchema>;
+export type PulseFollowedMetricsGroupsResponse = z.infer<
+  typeof pulseFollowedMetricsGroupsResponseSchema
+>;

@@ -4,6 +4,8 @@ import { z } from 'zod';
 import {
   pulseBundleRequestSchema,
   pulseBundleResponseSchema,
+  pulseDiscoverBriefSchema,
+  pulseFollowedMetricsGroupsResponseSchema,
   pulseInsightBundleTypeEnum,
   pulseMetricDefinitionSchema,
   pulseMetricDefinitionViewEnum,
@@ -132,8 +134,57 @@ const generatePulseMetricValueInsightBundleRestEndpoint = makeEndpoint({
   response: pulseBundleResponseSchema,
 });
 
+const getFollowedPulseMetricsGroupsRestEndpoint = makeEndpoint({
+  method: 'get',
+  path: '/pulse/metrics%3AfollowedMetricsGroups',
+  alias: 'getFollowedPulseMetricsGroups',
+  description: 'Returns groups of Pulse Metrics that the current user is following.',
+  parameters: [],
+  response: pulseFollowedMetricsGroupsResponseSchema,
+});
+
+const getPulseSummaryRestEndpoint = makeEndpoint({
+  method: 'get',
+  path: '/pulse/insights/summaries/SUMMARIZATION_STRATEGY_DIGEST',
+  alias: 'getPulseSummary',
+  description: 'Returns a summary digest of Pulse Metrics insights for the current user.',
+  parameters: [],
+  response: pulseFollowedMetricsGroupsResponseSchema,
+});
+
+const generatePulseDiscoverBriefRestEndpoint = makeEndpoint({
+  method: 'post',
+  path: '/pulse/insights/brief',
+  alias: 'generatePulseDiscoverBrief',
+  description: 'Generates an AI-powered Pulse Discover brief answering questions about metrics.',
+  parameters: [
+    {
+      name: 'body',
+      type: 'Body',
+      schema: z.object({
+        language: z.string(),
+        locale: z.string(),
+        time_zone: z.string(),
+        messages: z.array(
+          z.object({
+            content: z.string(),
+            action_type: z.string(),
+            role: z.string(),
+            metric_group_context_resolved: z.boolean(),
+            metric_group_context: z.array(z.any()),
+          }),
+        ),
+      }),
+    },
+  ],
+  response: pulseDiscoverBriefSchema,
+});
+
 const pulseApi = makeApi([
   generatePulseMetricValueInsightBundleRestEndpoint,
+  getFollowedPulseMetricsGroupsRestEndpoint,
+  getPulseSummaryRestEndpoint,
+  generatePulseDiscoverBriefRestEndpoint,
   listAllPulseMetricDefinitionsRestEndpoint,
   listPulseMetricDefinitionsFromMetricDefinitionIdsRestEndpoint,
   listPulseMetricsFromMetricDefinitionIdRestEndpoint,

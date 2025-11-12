@@ -8,10 +8,13 @@ import { Credentials } from '../types/credentials.js';
 import {
   pulseBundleRequestSchema,
   pulseBundleResponseSchema,
+  PulseDiscoverBrief,
+  PulseFollowedMetricsGroupsResponse,
   PulseInsightBundleType,
   PulseMetric,
   PulseMetricDefinition,
   PulseMetricDefinitionView,
+  PulseMetricGroup,
   PulseMetricSubscription,
 } from '../types/pulse.js';
 import AuthenticatedMethods from './authenticatedMethods.js';
@@ -157,6 +160,229 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
         }
         throw error;
       }
+    });
+  };
+
+  /**
+   * Returns groups of Pulse Metrics that the current user is following.
+   *
+   * Required scopes: `tableau:insight_metrics:read`
+   *
+   * @link https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_pulse.htm#MetricQueryService_FollowedMetricsGroups
+   */
+  getFollowedPulseMetricsGroups = async (): Promise<
+    PulseResult<PulseFollowedMetricsGroupsResponse>
+  > => {
+    return await guardAgainstPulseDisabled(async () => {
+      const response = await this._apiClient.getFollowedPulseMetricsGroups({
+        ...this.authHeader,
+      });
+      return response;
+    });
+  };
+
+  /**
+   * Returns a flat list of all Pulse Metrics that the current user is following.
+   * This is a convenience wrapper around getFollowedPulseMetricsGroups that flattens the groups.
+   *
+   * Required scopes: `tableau:insight_metrics:read`
+   */
+  getFollowedPulseMetrics = async (): Promise<PulseResult<PulseMetric[]>> => {
+    const groupsResult = await this.getFollowedPulseMetricsGroups();
+    if (groupsResult.isErr()) {
+      return groupsResult as PulseResult<PulseMetric[]>;
+    }
+
+    const metrics: PulseMetric[] = [];
+    groupsResult.value.metric_groups.forEach((group) => {
+      group.metrics.forEach((metric) => {
+        metrics.push(metric);
+      });
+    });
+
+    return new Ok(metrics);
+  };
+
+  /**
+   * Returns a summary digest of Pulse Metrics insights for the current user.
+   *
+   * Required scopes: `tableau:insights:read`
+   */
+  getPulseSummary = async (): Promise<PulseResult<PulseMetricGroup[]>> => {
+    return await guardAgainstPulseDisabled(async () => {
+      const response = await this._apiClient.getPulseSummary({
+        ...this.authHeader,
+      });
+      return response.metric_groups;
+    });
+  };
+
+  /**
+   * Generates an AI-powered Pulse Discover brief answering questions about metrics.
+   *
+   * Required scopes: `tableau:insights:read`, `tableau:insight_metrics:read`, `tableau:insight_definitions_metrics:read`
+   *
+   * @param question - The question to ask about the metrics
+   * @param metricIds - Array of metric IDs to use as context for the question
+   * @param actionType - The type of action (default: 'ACTION_TYPE_ANSWER')
+   * @param role - The role of the user (default: 'ROLE_USER')
+   */
+  generatePulseDiscoverBrief = async (
+    question: string,
+    metricIds: string[],
+    actionType: string = 'ACTION_TYPE_ANSWER',
+    role: string = 'ROLE_USER',
+  ): Promise<PulseResult<PulseDiscoverBrief>> => {
+    return await guardAgainstPulseDisabled(async () => {
+      // Fetch metrics and definitions to build the context
+      const metricsResult = await this.listPulseMetricsFromMetricIds(metricIds);
+      if (metricsResult.isErr()) {
+        throw new Error(`Failed to fetch metrics: ${metricsResult.error}`);
+      }
+
+      const metrics = metricsResult.value;
+      const definitionIds = Array.from(new Set(metrics.map((m) => m.definition_id)));
+
+      const definitionsResult =
+        await this.listPulseMetricDefinitionsFromMetricDefinitionIds(definitionIds);
+      if (definitionsResult.isErr()) {
+        throw new Error(`Failed to fetch definitions: ${definitionsResult.error}`);
+      }
+
+      const definitions = definitionsResult.value;
+
+      // Build the metric group context
+      const metricGroupContext = metrics.map((metric) => {
+        const definition = definitions.find((d) => d.metadata.id === metric.definition_id);
+        if (!definition) {
+          throw new Error(`Definition not found for metric ${metric.id}`);
+        }
+
+        return {
+          metadata: {
+            name: definition.metadata.name,
+            metric_id: metric.id,
+            definition_id: definition.metadata.id,
+          },
+          metric: {
+            definition: definition.specification,
+            metric_specification: metric.specification,
+            extension_options: definition.extension_options,
+            representation_options: definition.representation_options,
+            insights_options: definition.insights_options,
+            goals: metric.goals || {},
+            candidates: [],
+          },
+        };
+      });
+
+      // Call the API
+      const response = await this._apiClient.generatePulseDiscoverBrief(
+        {
+          language: 'LANGUAGE_EN_US',
+          locale: 'LOCALE_EN_US',
+          time_zone: 'UTC',
+          messages: [
+            {
+              content: question,
+              action_type: actionType,
+              role: role,
+              metric_group_context_resolved: true,
+              metric_group_context: metricGroupContext,
+            },
+          ],
+        },
+        { ...this.authHeader },
+      );
+
+      if (!response.markup) {
+        throw new Error(`Failed to generate discover brief: No markup returned`);
+      }
+
+      return response;
+    });
+  };
+
+  /**
+   * Convenience method to generate a springboard bundle by metric ID.
+   * This fetches the metric and definition, then generates the bundle.
+   *
+   * Required scopes: `tableau:insights:read`, `tableau:insight_metrics:read`, `tableau:insight_definitions_metrics:read`
+   *
+   * @param metricId - The ID of the metric to generate a springboard bundle for
+   */
+  generateSpringboardBundleByMetricId = async (
+    metricId: string,
+  ): Promise<PulseResult<z.infer<typeof pulseBundleResponseSchema>>> => {
+    return await guardAgainstPulseDisabled(async () => {
+      // Fetch the metric
+      const metricsResult = await this.listPulseMetricsFromMetricIds([metricId]);
+      if (metricsResult.isErr() || metricsResult.value.length === 0) {
+        throw new Error(`Metric not found: ${metricId}`);
+      }
+
+      const metric = metricsResult.value[0];
+
+      // Fetch the definition
+      const definitionsResult = await this.listPulseMetricDefinitionsFromMetricDefinitionIds([
+        metric.definition_id,
+      ]);
+      if (definitionsResult.isErr() || definitionsResult.value.length === 0) {
+        throw new Error(`Definition not found: ${metric.definition_id}`);
+      }
+
+      const definition = definitionsResult.value[0];
+
+      // Build the bundle request
+      const bundleRequest = {
+        bundle_request: {
+          version: 1,
+          options: {
+            output_format: 'OUTPUT_FORMAT_HTML' as const,
+            time_zone: 'UTC',
+            language: 'LANGUAGE_EN_US' as const,
+            locale: 'LOCALE_EN_US' as const,
+          },
+          input: {
+            metadata: {
+              name: definition.metadata.name,
+              metric_id: metric.id,
+              definition_id: definition.metadata.id,
+            },
+            metric: {
+              definition: {
+                datasource: definition.specification.datasource,
+                basic_specification: definition.specification.basic_specification,
+                is_running_total: definition.specification.is_running_total,
+              },
+              metric_specification: metric.specification,
+              extension_options: definition.extension_options,
+              representation_options: {
+                ...definition.representation_options,
+                sentiment_type:
+                  definition.representation_options.sentiment_type || 'SENTIMENT_TYPE_UNSPECIFIED',
+              },
+              insights_options: definition.insights_options || {
+                show_insights: true,
+                settings: [],
+              },
+              goals: metric.goals || {},
+            },
+          },
+        },
+      };
+
+      // Generate the bundle
+      const bundleResult = await this.generatePulseMetricValueInsightBundle(
+        bundleRequest,
+        'springboard',
+      );
+
+      if (bundleResult.isErr()) {
+        throw new Error(`Failed to generate springboard bundle: ${bundleResult.error}`);
+      }
+
+      return bundleResult.value;
     });
   };
 }
