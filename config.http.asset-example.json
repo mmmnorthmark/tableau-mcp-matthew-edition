@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "tableau": {
+      "command": "node",
+      "args": ["build/index.js"],
+      "env": {
+        "SERVER": "https://your-tableau-server.com",
+        "TRANSPORT": "http",
+        "HTTP_PORT_ENV_VAR_NAME": "PORT",
+        "PORT": "3927",
+        "AUTH": "pat",
+        "PAT_NAME": "your-pat-name",
+        "PAT_VALUE": "your-pat-value",
+        "CORS_ORIGIN_CONFIG": "[\"https://claude.ai\"]",
+        "MCP_ASSET_SECRET_KEY": "your-high-entropy-secret-key-at-least-32-chars-long",
+        "MCP_ASSET_CORS_ORIGINS": "https://claude.ai,https://chatgpt.com",
+        "MCP_ASSET_STORAGE_PATH": "./assets",
+        "MCP_ASSET_EXPIRATION_HOURS": "24"
+      }
+    }
+  }
+}

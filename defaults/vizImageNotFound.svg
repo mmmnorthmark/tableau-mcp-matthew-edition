@@ -1,0 +1,17 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="300" fill="#f8f9fa"/>
+  <g transform="translate(200, 150)">
+    <!-- Alert icon -->
+    <circle cx="0" cy="-20" r="40" fill="none" stroke="#dc3545" stroke-width="3"/>
+    <line x1="0" y1="-35" x2="0" y2="-10" stroke="#dc3545" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="0" cy="-3" r="3" fill="#dc3545"/>
+
+    <!-- Text -->
+    <text x="0" y="50" font-family="Arial, sans-serif" font-size="18" fill="#495057" text-anchor="middle" font-weight="bold">
+      Asset Not Found
+    </text>
+    <text x="0" y="75" font-family="Arial, sans-serif" font-size="14" fill="#6c757d" text-anchor="middle">
+      The requested visualization could not be found
+    </text>
+  </g>
+</svg>
