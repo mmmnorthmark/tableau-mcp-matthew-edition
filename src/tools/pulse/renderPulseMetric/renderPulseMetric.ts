@@ -48,9 +48,9 @@ This tool fetches metric data and generates a widget that displays:
 **Returns:**
 A widget that displays the Pulse metric with visualizations and insights. The widget is optimized for OpenAI Apps SDK environments.
 
-When MCP_ASSET_STRATEGY is 'local' or 's3', the response also includes:
+When MCP_ASSET_STRATEGY is not 'disabled' or 'inline' (e.g., 'local' or 's3'), the response includes:
 - \`visualizationUrls\`: Array of signed URLs to SVG visualizations that can be embedded in markdown
-- Example markdown: \`![Metric Visualization](https://mcp-server/tableau-mcp/assets?assetId=...)\`
+- Example markdown: \`![Metric Visualization](http://localhost:3927/tableau-mcp/assets?assetId=...)\`
 
 **Note:**
 This tool is designed specifically for OpenAI Apps SDK integration and provides an interactive widget experience.
@@ -221,10 +221,10 @@ This tool is designed specifically for OpenAI Apps SDK integration and provides 
                 throw new Error('Invalid response from Pulse API: missing bundle_response');
               }
 
-              // Render SVG visualizations if asset strategy is 'local' or 's3'
+              // Render SVG visualizations unless asset strategy is 'disabled' or 'inline'
               let visualizationUrls: Array<{ insightType: string; url: string }> = [];
 
-              if (config.assetStrategy === 'local' || config.assetStrategy === 's3') {
+              if (config.assetStrategy !== 'disabled' && config.assetStrategy !== 'inline') {
                 log.info(
                   server,
                   `[renderPulseMetric] Rendering SVG visualizations with asset strategy: ${config.assetStrategy}`,
