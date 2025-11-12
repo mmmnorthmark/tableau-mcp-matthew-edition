@@ -3,6 +3,7 @@ import { getGetDatasourceMetadataTool } from './getDatasourceMetadata/getDatasou
 import { getListDatasourcesTool } from './listDatasources/listDatasources.js';
 import { getGeneratePulseMetricValueInsightBundleTool } from './pulse/generateMetricValueInsightBundle/generatePulseMetricValueInsightBundleTool.js';
 import { getListAllPulseMetricDefinitionsTool } from './pulse/listAllMetricDefinitions/listAllPulseMetricDefinitions.js';
+import { getListAllPulseMetricDefinitionsWithMetricsTool } from './pulse/listAllMetricDefinitions/listAllPulseMetricDefinitionsWithMetrics.js';
 import { getListPulseMetricDefinitionsFromDefinitionIdsTool } from './pulse/listMetricDefinitionsFromDefinitionIds/listPulseMetricDefinitionsFromDefinitionIds.js';
 import { getListPulseMetricsFromMetricDefinitionIdTool } from './pulse/listMetricsFromMetricDefinitionId/listPulseMetricsFromMetricDefinitionId.js';
 import { getListPulseMetricsFromMetricIdsTool } from './pulse/listMetricsFromMetricIds/listPulseMetricsFromMetricIds.js';
@@ -21,6 +22,7 @@ export const toolFactories = [
   getListDatasourcesTool,
   getQueryDatasourceTool,
   getListAllPulseMetricDefinitionsTool,
+  getListAllPulseMetricDefinitionsWithMetricsTool,
   getListPulseMetricDefinitionsFromDefinitionIdsTool,
   getListPulseMetricsFromMetricDefinitionIdTool,
   getListPulseMetricsFromMetricIdsTool,

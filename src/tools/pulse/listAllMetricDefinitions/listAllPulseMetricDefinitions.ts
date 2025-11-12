@@ -17,7 +17,13 @@ export const getListAllPulseMetricDefinitionsTool = (server: Server): Tool<typeo
     server,
     name: 'list-all-pulse-metric-definitions',
     description: `
-Retrieves a list of all published Pulse Metric Definitions using the Tableau REST API.  Use this tool when a user requests to list all Tableau Pulse Metric Definitions on the current site.
+Retrieves a list of all published Pulse Metric Definitions using the Tableau REST API.
+
+**Important:** This tool returns limited metrics per definition (up to 5 with DEFINITION_VIEW_FULL). If you need to search for specific metrics by name or see ALL metrics including submetrics, use \`list-all-pulse-metric-definitions-with-metrics\` instead.
+
+**Use this tool when:**
+- User wants a quick overview of metric definitions without full metric details
+- You already know the definition IDs and will fetch metrics separately
 
 **Parameters:**
 - \`view\` (optional): The range of metrics to return for a definition. The default is 'DEFINITION_VIEW_BASIC' if not specified.

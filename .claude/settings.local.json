@@ -17,7 +17,8 @@
       "Bash(git push:*)",
       "Bash(npm test:*)",
       "Bash(git pull:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(curl -X POST http://localhost:3927/mcp/v1/tools/call -H \"Content-Type: application/json\" -d '{\n    \"\"\"\"params\"\"\"\": {\n      \"\"\"\"name\"\"\"\": \"\"\"\"list-all-pulse-metric-definitions\"\"\"\",\n      \"\"\"\"arguments\"\"\"\": {}\n    }\n  }')"
     ],
     "deny": [],
     "ask": []

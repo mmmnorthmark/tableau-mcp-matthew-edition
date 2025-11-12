@@ -30,6 +30,8 @@ export const getSearchContentTool = (server: Server): Tool<typeof paramsSchema> 
     description: `
 This tool searches across all supported content types for objects relevant to the search expression specified by search terms and filters.
 
+**Important:** This tool does NOT search Pulse metrics. For Pulse metrics, use \`list-all-pulse-metric-definitions-with-metrics\` instead.
+
 **Parameters:**
 
 - \`terms\` (optional): A string containing one or more search terms that the search uses as the basis for determining which items are relevant to return. If the terms parameter is not provided, it searches for everything bound by the specified filters.
@@ -51,7 +53,8 @@ This tool searches across all supported content types for objects relevant to th
   For each sort method, you can specify a sort direction: 'asc' for ascending or 'desc' for descending (default: 'asc'). The orderBy parameter is an array of objects containing the sorting method and direction. The first element determines primary sorting, with subsequent elements used as tiebreakers.
 
 **Important Notes:**
-- If \`orderBy\` is omitted, the search will sort items by their "relevance score" in descending order, which is Tableau's internal algorithm for providing the most relevant results`,
+- If \`orderBy\` is omitted, the search will sort items by their "relevance score" in descending order, which is Tableau's internal algorithm for providing the most relevant results
+- This tool does NOT include Pulse metrics. To find Pulse metrics by name or search for metrics, use \`list-all-pulse-metric-definitions-with-metrics\` instead.`,
     paramsSchema,
     annotations: {
       title: 'Search Content',
