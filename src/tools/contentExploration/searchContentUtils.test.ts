@@ -1,7 +1,10 @@
 import { OrderBy, SearchContentFilter } from '../../sdks/tableau/types/contentExploration.js';
+import invariant from '../../utils/invariant.js';
+import { mockSearchContentResponse } from './searchContent.test.js';
 import {
   buildFilterString,
   buildOrderByString,
+  constrainSearchContent,
   reduceSearchContentResponse,
 } from './searchContentUtils.js';
 
@@ -255,6 +258,7 @@ describe('searchContentUtils', () => {
             content: {
               type: 'datasource',
               title: 'Test Datasource',
+              luid: 'test-luid',
               ownerId: 456,
             },
           },
@@ -268,6 +272,7 @@ describe('searchContentUtils', () => {
         type: 'datasource',
         title: 'Test Datasource',
         ownerId: 456,
+        luid: 'test-luid',
       });
     });
 
@@ -430,6 +435,7 @@ describe('searchContentUtils', () => {
               type: 'datasource',
               title: 'Datasource 1',
               ownerId: 456,
+              luid: 'test-luid',
             },
           },
         ],
@@ -447,7 +453,142 @@ describe('searchContentUtils', () => {
         type: 'datasource',
         title: 'Datasource 1',
         ownerId: 456,
+        luid: 'test-luid',
       });
+    });
+
+    it('should combine unifieddatasource entries with correspdonding datasource entries', () => {
+      const response = {
+        total: 1,
+        items: [
+          {
+            uri: 'test-uri',
+            content: {
+              type: 'unifieddatasource',
+              title: 'Test Unified Datasource',
+              datasourceLuid: 'test-datasource-luid',
+              luid: 'test-unifieddatasource-luid',
+              ownerId: 123,
+            },
+          },
+          {
+            uri: 'test-uri-2',
+            content: {
+              type: 'datasource',
+              title: 'Test Datasource',
+              luid: 'test-datasource-luid',
+            },
+          },
+        ],
+      };
+      const result = reduceSearchContentResponse(response);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        type: 'datasource',
+        title: 'Test Unified Datasource',
+        luid: 'test-datasource-luid',
+        ownerId: 123,
+      });
+    });
+  });
+
+  describe('constrainSearchContent', () => {
+    it('should return empty result when no items are found', () => {
+      const result = constrainSearchContent({
+        items: [],
+        boundedContext: {
+          projectIds: null,
+          datasourceIds: null,
+          workbookIds: null,
+        },
+      });
+
+      invariant(result.type === 'empty');
+      expect(result.message).toBe(
+        'No search results were found. Either none exist or you do not have permission to view them.',
+      );
+    });
+
+    it('should return empty result when all items were filtered out by the bounded context', () => {
+      const items = reduceSearchContentResponse(mockSearchContentResponse);
+
+      const result = constrainSearchContent({
+        items,
+        boundedContext: {
+          projectIds: new Set(['123']),
+          datasourceIds: null,
+          workbookIds: null,
+        },
+      });
+
+      invariant(result.type === 'empty');
+      expect(result.message).toBe(
+        [
+          'The set of allowed content that can be queried is limited by the server configuration.',
+          'While search results were found, they were all filtered out by the server configuration.',
+        ].join(' '),
+      );
+    });
+
+    it('should return success result when no items were filtered out by the bounded context', () => {
+      const items = reduceSearchContentResponse(mockSearchContentResponse);
+
+      const result = constrainSearchContent({
+        items,
+        boundedContext: {
+          projectIds: null,
+          datasourceIds: null,
+          workbookIds: null,
+        },
+      });
+
+      invariant(result.type === 'success');
+      expect(result.result).toEqual([items[0], items[1]]);
+    });
+
+    it('should return success result when some items were filtered out by allowed projects in the bounded context', () => {
+      const items = reduceSearchContentResponse(mockSearchContentResponse);
+      const result = constrainSearchContent({
+        items,
+        boundedContext: {
+          projectIds: new Set(['123456']),
+          datasourceIds: null,
+          workbookIds: null,
+        },
+      });
+
+      invariant(result.type === 'success');
+      expect(result.result).toEqual([items[0]]);
+    });
+
+    it('should return success result when some items were filtered out by allowed datasources in the bounded context', () => {
+      const items = reduceSearchContentResponse(mockSearchContentResponse);
+      const result = constrainSearchContent({
+        items,
+        boundedContext: {
+          projectIds: null,
+          datasourceIds: new Set(['some-other-datasource-luid']),
+          workbookIds: null,
+        },
+      });
+
+      invariant(result.type === 'success');
+      expect(result.result).toEqual([items[0]]);
+    });
+
+    it('should return success result when some items were filtered out by allowed workbooks in the bounded context', () => {
+      const items = reduceSearchContentResponse(mockSearchContentResponse);
+      const result = constrainSearchContent({
+        items,
+        boundedContext: {
+          projectIds: null,
+          datasourceIds: null,
+          workbookIds: new Set(['some-other-workbook-luid']),
+        },
+      });
+
+      invariant(result.type === 'success');
+      expect(result.result).toEqual([items[1]]);
     });
   });
 });

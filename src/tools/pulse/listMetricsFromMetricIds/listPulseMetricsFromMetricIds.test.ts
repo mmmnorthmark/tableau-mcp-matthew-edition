@@ -1,22 +1,10 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Err, Ok } from 'ts-results-es';
 
-import type { PulseMetric } from '../../../sdks/tableau/types/pulse.js';
 import { Server } from '../../../server.js';
+import { Provider } from '../../../utils/provider.js';
+import { mockPulseMetricDefinitions } from '../mockPulseMetricDefinitions.js';
 import { getListPulseMetricsFromMetricIdsTool } from './listPulseMetricsFromMetricIds.js';
-
-const mockPulseMetrics: PulseMetric[] = [
-  {
-    id: 'CF32DDCC-362B-4869-9487-37DA4D152552',
-    is_default: true,
-    is_followed: false,
-  } as PulseMetric,
-  {
-    id: 'CF32DDCC-362B-4869-9487-37DA4D152553',
-    is_default: false,
-    is_followed: true,
-  } as PulseMetric,
-];
 
 const mocks = vi.hoisted(() => ({
   mockListPulseMetricsFromMetricIds: vi.fn(),
@@ -28,11 +16,14 @@ vi.mock('../../../restApiInstance.js', () => ({
       pulseMethods: {
         listPulseMetricsFromMetricIds: mocks.mockListPulseMetricsFromMetricIds,
       },
+      siteId: 'test-site-id',
     }),
   ),
 }));
 
 describe('listPulseMetricsFromMetricIdsTool', () => {
+  const mockPulseMetrics = mockPulseMetricDefinitions.flatMap((definition) => definition.metrics);
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -108,7 +99,8 @@ describe('listPulseMetricsFromMetricIdsTool', () => {
 
 async function getToolResult(params: { metricIds: string[] }): Promise<CallToolResult> {
   const listPulseMetricsFromMetricIdsTool = getListPulseMetricsFromMetricIdsTool(new Server());
-  return await listPulseMetricsFromMetricIdsTool.callback(params, {
+  const callback = await Provider.from(listPulseMetricsFromMetricIdsTool.callback);
+  return await callback(params, {
     signal: new AbortController().signal,
     requestId: 'test-request-id',
     sendNotification: vi.fn(),

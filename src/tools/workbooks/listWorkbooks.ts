@@ -2,12 +2,14 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Ok } from 'ts-results-es';
 import { z } from 'zod';
 
-import { getConfig } from '../../config.js';
+import { BoundedContext, getConfig } from '../../config.js';
 import { useRestApi } from '../../restApiInstance.js';
+import { Workbook } from '../../sdks/tableau/types/workbook.js';
 import { Server } from '../../server.js';
+import { getTableauAuthInfo } from '../../server/oauth/getTableauAuthInfo.js';
 import { paginate } from '../../utils/paginate.js';
 import { genericFilterDescription } from '../genericFilterDescription.js';
-import { Tool } from '../tool.js';
+import { ConstrainedResult, Tool } from '../tool.js';
 import { parseAndValidateWorkbooksFilterString } from './workbooksFilterUtils.js';
 
 const paramsSchema = {
@@ -61,12 +63,16 @@ export const getListWorkbooksTool = (server: Server): Tool<typeof paramsSchema> 
       readOnlyHint: true,
       openWorldHint: false,
     },
-    callback: async ({ filter, pageSize, limit }, { requestId }): Promise<CallToolResult> => {
+    callback: async (
+      { filter, pageSize, limit },
+      { requestId, authInfo },
+    ): Promise<CallToolResult> => {
       const config = getConfig();
       const validatedFilter = filter ? parseAndValidateWorkbooksFilterString(filter) : undefined;
 
       return await listWorkbooksTool.logAndExecute({
         requestId,
+        authInfo,
         args: {},
         callback: async () => {
           return new Ok(
@@ -75,6 +81,7 @@ export const getListWorkbooksTool = (server: Server): Tool<typeof paramsSchema> 
               requestId,
               server,
               jwtScopes: ['tableau:content:read'],
+              authInfo: getTableauAuthInfo(authInfo),
               callback: async (restApi) => {
                 const workbooks = await paginate({
                   pageConfig: {
@@ -101,9 +108,53 @@ export const getListWorkbooksTool = (server: Server): Tool<typeof paramsSchema> 
             }),
           );
         },
+        constrainSuccessResult: (workbooks) =>
+          constrainWorkbooks({ workbooks, boundedContext: config.boundedContext }),
       });
     },
   });
 
   return listWorkbooksTool;
 };
+
+export function constrainWorkbooks({
+  workbooks,
+  boundedContext,
+}: {
+  workbooks: Array<Workbook>;
+  boundedContext: BoundedContext;
+}): ConstrainedResult<Array<Workbook>> {
+  if (workbooks.length === 0) {
+    return {
+      type: 'empty',
+      message:
+        'No workbooks were found. Either none exist or you do not have permission to view them.',
+    };
+  }
+
+  const { projectIds, workbookIds } = boundedContext;
+  if (projectIds) {
+    workbooks = workbooks.filter((workbook) =>
+      workbook.project?.id ? projectIds.has(workbook.project.id) : false,
+    );
+  }
+
+  if (workbookIds) {
+    workbooks = workbooks.filter((workbook) => workbookIds.has(workbook.id));
+  }
+
+  if (workbooks.length === 0) {
+    return {
+      type: 'empty',
+      message: [
+        'The set of allowed workbooks that can be queried is limited by the server configuration.',
+        'While workbooks were found, they were all filtered out by the server configuration.',
+      ].join(' '),
+    };
+  }
+
+  return {
+    type: 'success',
+    result: workbooks,
+  };
+}

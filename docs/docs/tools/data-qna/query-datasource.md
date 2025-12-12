@@ -10,10 +10,14 @@ data.
 ## APIs called
 
 - [Query Data Source](https://help.tableau.com/current/api/vizql-data-service/en-us/reference/index.html#tag/HeadlessBI/operation/QueryDatasource)
+  from VizQL Data Service
+- [Query Data Source](https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_data_sources.htm#query_data_source)
+  from REST API (if data source [tool scoping](../../configuration/mcp-config/tool-scoping.md) is
+  enabled)
 
 ## Environment variables
 
-- [`DISABLE_QUERY_DATASOURCE_FILTER_VALIDATION`](../../configuration/mcp-config/optional.md#disable_query_datasource_filter_validation)
+- [`DISABLE_QUERY_DATASOURCE_VALIDATION_REQUESTS`](../../configuration/mcp-config/env-vars.md#disable_query_datasource_validation_requests)
 
 ## Required arguments
 

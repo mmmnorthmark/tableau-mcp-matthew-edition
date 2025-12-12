@@ -6,7 +6,9 @@ import { getConfig } from '../../config.js';
 import { useRestApi } from '../../restApiInstance.js';
 import { GraphQLResponse } from '../../sdks/tableau/apis/metadataApi.js';
 import { Server } from '../../server.js';
+import { getTableauAuthInfo } from '../../server/oauth/getTableauAuthInfo.js';
 import { getVizqlDataServiceDisabledError } from '../getVizqlDataServiceDisabledError.js';
+import { resourceAccessChecker } from '../resourceAccessChecker.js';
 import { Tool } from '../tool.js';
 import { validateDatasourceLuid } from '../validateDatasourceLuid.js';
 import {
@@ -82,17 +84,23 @@ const paramsSchema = {
   datasourceLuid: z.string().nonempty(),
 };
 
-export type GetDatasourceMetadataError = {
-  type: 'feature-disabled';
-};
+export type GetDatasourceMetadataError =
+  | {
+      type: 'feature-disabled';
+    }
+  | {
+      type: 'datasource-not-allowed';
+      message: string;
+    };
 
 export const getGetDatasourceMetadataTool = (server: Server): Tool<typeof paramsSchema> => {
   const getDatasourceMetadataTool = new Tool({
     server,
     name: 'get-datasource-metadata',
     description: `
-    This tool retrieves field metadata for a specified datasource by taking the basic, high level, metadata results from Tableau's VizQL Data Service and enriches them with additional context provided by Tableau's Metadata API.
-    The fields provided by this tool will contain properties such as name and dataType, but may also expose richer context such as descriptions, dataCategories, roles, etc.
+    This tool retrieves metadata for a specified datasource by taking the basic, high level, metadata results from Tableau's VizQL Data Service and enriches them with additional context provided by Tableau's Metadata API.
+    The metadata provided by this tool consists of the fields and parameters that belong to the datasource.
+    Fields will contain properties such as name and dataType, but may also expose richer context such as descriptions, dataCategories, roles, etc.
     This tool should be used for getting the metadata to ground the use of a tool that queries Tableau published data sources.
     `,
     paramsSchema,
@@ -102,7 +110,7 @@ export const getGetDatasourceMetadataTool = (server: Server): Tool<typeof params
       openWorldHint: false,
     },
     argsValidator: validateDatasourceLuid,
-    callback: async ({ datasourceLuid }, { requestId }): Promise<CallToolResult> => {
+    callback: async ({ datasourceLuid }, { requestId, authInfo }): Promise<CallToolResult> => {
       const config = getConfig();
       const query = getGraphqlQuery(datasourceLuid);
 
@@ -111,13 +119,27 @@ export const getGetDatasourceMetadataTool = (server: Server): Tool<typeof params
         GetDatasourceMetadataError
       >({
         requestId,
+        authInfo,
         args: { datasourceLuid },
         callback: async () => {
+          const isDatasourceAllowedResult = await resourceAccessChecker.isDatasourceAllowed({
+            datasourceLuid,
+            restApiArgs: { config, requestId, server },
+          });
+
+          if (!isDatasourceAllowedResult.allowed) {
+            return new Err({
+              type: 'datasource-not-allowed',
+              message: isDatasourceAllowedResult.message,
+            });
+          }
+
           return await useRestApi({
             config,
             requestId,
             server,
             jwtScopes: ['tableau:content:read', 'tableau:viz_data_service:read'],
+            authInfo: getTableauAuthInfo(authInfo),
             callback: async (restApi) => {
               // Fetching metadata from VizQL Data Service API.
               const readMetadataResult = await restApi.vizqlDataServiceMethods.readMetadata({
@@ -150,10 +172,18 @@ export const getGetDatasourceMetadataTool = (server: Server): Tool<typeof params
             },
           });
         },
+        constrainSuccessResult: (fields) => {
+          return {
+            type: 'success',
+            result: fields,
+          };
+        },
         getErrorText: (error: GetDatasourceMetadataError) => {
           switch (error.type) {
             case 'feature-disabled':
               return getVizqlDataServiceDisabledError();
+            case 'datasource-not-allowed':
+              return error.message;
           }
         },
       });

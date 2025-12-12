@@ -19,10 +19,15 @@ env.list
 # .vscode/ - Contains recommended extensions and launch configs
 # .github/ - Contains workflows and templates
 manifest.json
+sea-prep.blob
+tableau-mcp
 tableau-mcp.dxt
+tableau-mcp.exe
 tableau-mcp.mcpb
 *.pem
 *.tgz
+*.tar.gz
+*.zip
 
 # Ignore generated assets (SVG files, JSON metadata), but keep the assets folder structure
 assets/*

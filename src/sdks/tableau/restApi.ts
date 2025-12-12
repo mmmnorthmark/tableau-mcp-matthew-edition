@@ -7,13 +7,15 @@ import {
   RequestInterceptor,
   ResponseInterceptor,
 } from './interceptors.js';
-import AuthenticationMethods, {
+import {
   AuthenticatedAuthenticationMethods,
+  AuthenticationMethods,
 } from './methods/authenticationMethods.js';
 import ContentExplorationMethods from './methods/contentExplorationMethods.js';
 import DatasourcesMethods from './methods/datasourcesMethods.js';
 import MetadataMethods from './methods/metadataMethods.js';
 import PulseMethods from './methods/pulseMethods.js';
+import { AuthenticatedServerMethods, ServerMethods } from './methods/serverMethods.js';
 import ViewsMethods from './methods/viewsMethods.js';
 import VizqlDataServiceMethods from './methods/vizqlDataServiceMethods.js';
 import WorkbooksMethods from './methods/workbooksMethods.js';
@@ -25,7 +27,7 @@ import { Credentials } from './types/credentials.js';
  * @export
  * @class RestApi
  */
-export default class RestApi {
+export class RestApi {
   private _creds?: Credentials;
   private readonly _host: string;
   private readonly _baseUrl: string;
@@ -33,10 +35,12 @@ export default class RestApi {
 
   private _authenticationMethods?: AuthenticationMethods;
   private _authenticatedAuthenticationMethods?: AuthenticatedAuthenticationMethods;
+  private _authenticatedServerMethods?: AuthenticatedServerMethods;
   private _contentExplorationMethods?: ContentExplorationMethods;
   private _datasourcesMethods?: DatasourcesMethods;
   private _metadataMethods?: MetadataMethods;
   private _pulseMethods?: PulseMethods;
+  private _serverMethods?: ServerMethods;
   private _vizqlDataServiceMethods?: VizqlDataServiceMethods;
   private _viewsMethods?: ViewsMethods;
   private _workbooksMethods?: WorkbooksMethods;
@@ -90,6 +94,14 @@ export default class RestApi {
     return this._authenticatedAuthenticationMethods;
   }
 
+  get authenticatedServerMethods(): AuthenticatedServerMethods {
+    if (!this._authenticatedServerMethods) {
+      this._authenticatedServerMethods = new AuthenticatedServerMethods(this._baseUrl, this.creds);
+      this._addInterceptors(this._baseUrl, this._authenticatedServerMethods.interceptors);
+    }
+    return this._authenticatedServerMethods;
+  }
+
   get contentExplorationMethods(): ContentExplorationMethods {
     if (!this._contentExplorationMethods) {
       this._contentExplorationMethods = new ContentExplorationMethods(
@@ -133,6 +145,15 @@ export default class RestApi {
     return this._pulseMethods;
   }
 
+  get serverMethods(): ServerMethods {
+    if (!this._serverMethods) {
+      this._serverMethods = new ServerMethods(this._baseUrl);
+      this._addInterceptors(this._baseUrl, this._serverMethods.interceptors);
+    }
+
+    return this._serverMethods;
+  }
+
   get vizqlDataServiceMethods(): VizqlDataServiceMethods {
     if (!this._vizqlDataServiceMethods) {
       const baseUrl = `${this._host}/api/v1/vizql-data-service`;
@@ -168,6 +189,24 @@ export default class RestApi {
   signOut = async (): Promise<void> => {
     await this.authenticatedAuthenticationMethods.signOut();
     this._creds = undefined;
+  };
+
+  setCredentials = (accessToken: string, userId: string): void => {
+    const parts = accessToken.split('|');
+    if (parts.length < 3) {
+      throw new Error('Could not determine site ID. Access token must have 3 parts.');
+    }
+
+    const siteId = parts[2];
+    this._creds = {
+      site: {
+        id: siteId,
+      },
+      user: {
+        id: userId,
+      },
+      token: accessToken,
+    };
   };
 
   private _addInterceptors = (baseUrl: string, interceptors: AxiosInterceptor): void => {

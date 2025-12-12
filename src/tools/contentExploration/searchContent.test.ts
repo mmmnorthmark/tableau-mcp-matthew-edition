@@ -1,9 +1,10 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { Server } from '../../server.js';
+import { Provider } from '../../utils/provider.js';
 import { getSearchContentTool } from './searchContent.js';
 
-const mockSearchContentResponse = {
+export const mockSearchContentResponse = {
   next: 'next-page-url',
   prev: 'prev-page-url',
   pageIndex: 0,
@@ -20,6 +21,7 @@ const mockSearchContentResponse = {
         ownerName: 'John Doe',
         ownerId: 123,
         ownerEmail: 'john.doe@example.com',
+        projectId: 123456,
         projectName: 'Finance',
         containerName: 'Finance',
         hitsTotal: 150,
@@ -41,6 +43,29 @@ const mockSearchContentResponse = {
         ownerName: 'Jane Smith',
         ownerId: 456,
         ownerEmail: 'jane.smith@example.com',
+        projectId: 987654,
+        projectName: 'Marketing',
+        containerName: 'Marketing',
+        hitsTotal: 75,
+        hitsSmallSpanTotal: 5,
+        hitsMediumSpanTotal: 15,
+        hitsLargeSpanTotal: 30,
+        favoritesTotal: 3,
+        modifiedTime: '2024-01-10T14:20:00Z',
+        createdTime: '2023-11-15T11:30:00Z',
+      },
+    },
+    {
+      uri: 'test-uri-2',
+      content: {
+        type: 'unifieddatasource',
+        luid: 'unifieddatasource-1-luid',
+        datasourceLuid: 'datasource-1-luid',
+        title: 'Customer Data',
+        ownerName: 'Jane Smith',
+        ownerId: 456,
+        ownerEmail: 'jane.smith@example.com',
+        projectId: 987654,
         projectName: 'Marketing',
         containerName: 'Marketing',
         hitsTotal: 75,
@@ -308,14 +333,17 @@ describe('searchContentTool', () => {
     const result = await getToolResult({ terms: 'nonexistent' });
 
     expect(result.isError).toBe(false);
-    const responseData = JSON.parse(result.content[0].text as string);
-    expect(responseData).toEqual([]);
+    const responseData = result.content[0].text as string;
+    expect(responseData).toEqual(
+      'No search results were found. Either none exist or you do not have permission to view them.',
+    );
   });
 });
 
 async function getToolResult(params: any): Promise<CallToolResult> {
   const searchContentTool = getSearchContentTool(new Server());
-  return await searchContentTool.callback(params, {
+  const callback = await Provider.from(searchContentTool.callback);
+  return await callback(params, {
     signal: new AbortController().signal,
     requestId: 'test-request-id',
     sendNotification: vi.fn(),

@@ -2,12 +2,14 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Ok } from 'ts-results-es';
 import { z } from 'zod';
 
-import { getConfig } from '../../config.js';
+import { BoundedContext, getConfig } from '../../config.js';
 import { useRestApi } from '../../restApiInstance.js';
+import { View } from '../../sdks/tableau/types/view.js';
 import { Server } from '../../server.js';
+import { getTableauAuthInfo } from '../../server/oauth/getTableauAuthInfo.js';
 import { paginate } from '../../utils/paginate.js';
 import { genericFilterDescription } from '../genericFilterDescription.js';
-import { Tool } from '../tool.js';
+import { ConstrainedResult, Tool } from '../tool.js';
 import { parseAndValidateViewsFilterString } from './viewsFilterUtils.js';
 
 const paramsSchema = {
@@ -64,12 +66,16 @@ export const getListViewsTool = (server: Server): Tool<typeof paramsSchema> => {
       readOnlyHint: true,
       openWorldHint: false,
     },
-    callback: async ({ filter, pageSize, limit }, { requestId }): Promise<CallToolResult> => {
+    callback: async (
+      { filter, pageSize, limit },
+      { requestId, authInfo },
+    ): Promise<CallToolResult> => {
       const config = getConfig();
       const validatedFilter = filter ? parseAndValidateViewsFilterString(filter) : undefined;
 
       return await listViewsTool.logAndExecute({
         requestId,
+        authInfo,
         args: {},
         callback: async () => {
           return new Ok(
@@ -78,8 +84,9 @@ export const getListViewsTool = (server: Server): Tool<typeof paramsSchema> => {
               requestId,
               server,
               jwtScopes: ['tableau:content:read'],
+              authInfo: getTableauAuthInfo(authInfo),
               callback: async (restApi) => {
-                const workbooks = await paginate({
+                const views = await paginate({
                   pageConfig: {
                     pageSize,
                     limit: config.maxResultLimit
@@ -100,14 +107,55 @@ export const getListViewsTool = (server: Server): Tool<typeof paramsSchema> => {
                   },
                 });
 
-                return workbooks;
+                return views;
               },
             }),
           );
         },
+        constrainSuccessResult: (views) =>
+          constrainViews({ views, boundedContext: config.boundedContext }),
       });
     },
   });
 
   return listViewsTool;
 };
+
+export function constrainViews({
+  views,
+  boundedContext,
+}: {
+  views: Array<View>;
+  boundedContext: BoundedContext;
+}): ConstrainedResult<Array<View>> {
+  if (views.length === 0) {
+    return {
+      type: 'empty',
+      message: 'No views were found. Either none exist or you do not have permission to view them.',
+    };
+  }
+
+  const { projectIds, workbookIds } = boundedContext;
+  if (projectIds) {
+    views = views.filter((view) => (view.project?.id ? projectIds.has(view.project.id) : false));
+  }
+
+  if (workbookIds) {
+    views = views.filter((view) => (view.workbook?.id ? workbookIds.has(view.workbook.id) : false));
+  }
+
+  if (views.length === 0) {
+    return {
+      type: 'empty',
+      message: [
+        'The set of allowed views that can be queried is limited by the server configuration.',
+        'While views were found, they were all filtered out by the server configuration.',
+      ].join(' '),
+    };
+  }
+
+  return {
+    type: 'success',
+    result: views,
+  };
+}

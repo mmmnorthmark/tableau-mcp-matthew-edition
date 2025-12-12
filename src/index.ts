@@ -26,7 +26,7 @@ async function startServer(): Promise<void> {
   switch (config.transport) {
     case 'stdio': {
       const server = new Server();
-      server.registerTools();
+      await server.registerTools();
       server.registerRequestHandlers();
 
       const transport = new StdioServerTransport();
@@ -39,22 +39,26 @@ async function startServer(): Promise<void> {
     case 'http': {
       const { url } = await startExpressServer({ basePath: serverName, config, logLevel });
 
+      if (!config.oauth.enabled) {
+        console.warn(
+          '⚠️ TRANSPORT is "http" but OAuth is disabled! Your MCP server may not be protected from unauthorized access! By having explicitly disabled OAuth by setting the DANGEROUSLY_DISABLE_OAUTH environment variable to "true", you accept any and all risks associated with this decision.',
+        );
+      }
+
       // eslint-disable-next-line no-console -- console.log is intentional here since the transport is not stdio.
       console.log(
-        `${serverName} v${serverVersion} stateless streamable HTTP server available at ${url}`,
+        `${serverName} v${serverVersion} ${config.disableSessionManagement ? 'stateless ' : ''}streamable HTTP server available at ${url}`,
       );
       break;
     }
   }
 
   if (config.disableLogMasking) {
-    writeToStderr('Log masking is disabled!');
+    writeToStderr('⚠️ Log masking is disabled!');
   }
 }
 
-try {
-  await startServer();
-} catch (error) {
+startServer().catch((error) => {
   writeToStderr(`Fatal error when starting the server: ${getExceptionMessage(error)}`);
   process.exit(1);
-}
+});

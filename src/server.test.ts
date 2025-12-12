@@ -4,6 +4,7 @@ import { exportedForTesting as serverExportedForTesting } from './server.js';
 import { getQueryDatasourceTool } from './tools/queryDatasource/queryDatasource.js';
 import { toolNames } from './tools/toolName.js';
 import { toolFactories } from './tools/tools.js';
+import { Provider } from './utils/provider.js';
 
 const { Server } = serverExportedForTesting;
 
@@ -24,9 +25,9 @@ describe('server', () => {
 
   it('should register tools', async () => {
     const server = getServer();
-    server.registerTools();
+    await server.registerTools();
 
-    const tools = toolFactories.map((tool) => tool(server));
+    const tools = toolFactories.map((toolFactory) => toolFactory(server));
     for (const tool of tools) {
       if (tool._meta) {
         // Tools with _meta should use registerTool()
@@ -34,7 +35,7 @@ describe('server', () => {
           tool.name,
           {
             title: tool.title,
-            description: tool.description,
+            description: await Provider.from(tool.description),
             inputSchema: expect.any(Object),
             annotations: expect.any(Object),
             _meta: tool._meta,
@@ -45,7 +46,7 @@ describe('server', () => {
         // Tools without _meta should use tool()
         expect(server.tool).toHaveBeenCalledWith(
           tool.name,
-          tool.description,
+          await Provider.from(tool.description),
           expect.any(Object),
           expect.any(Object),
           expect.any(Function),
@@ -57,13 +58,13 @@ describe('server', () => {
   it('should register tools filtered by includeTools', async () => {
     process.env.INCLUDE_TOOLS = 'query-datasource';
     const server = getServer();
-    server.registerTools();
+    await server.registerTools();
 
     const tool = getQueryDatasourceTool(server);
     // query-datasource doesn't have _meta
     expect(server.tool).toHaveBeenCalledWith(
       tool.name,
-      tool.description,
+      await Provider.from(tool.description),
       expect.any(Object),
       expect.any(Object),
       expect.any(Function),
@@ -73,9 +74,9 @@ describe('server', () => {
   it('should register tools filtered by excludeTools', async () => {
     process.env.EXCLUDE_TOOLS = 'query-datasource';
     const server = getServer();
-    server.registerTools();
+    await server.registerTools();
 
-    const tools = toolFactories.map((tool) => tool(server));
+    const tools = toolFactories.map((toolFactory) => toolFactory(server));
     for (const tool of tools) {
       if (tool.name === 'query-datasource') {
         // query-datasource should not be registered
@@ -130,7 +131,7 @@ describe('server', () => {
     ];
 
     for (const sentence of sentences) {
-      expect(() => server.registerTools()).toThrow(sentence);
+      await expect(server.registerTools).rejects.toThrow(sentence);
     }
   });
 

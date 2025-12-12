@@ -1,30 +1,10 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Err, Ok } from 'ts-results-es';
 
-import type { PulseMetricDefinition } from '../../../sdks/tableau/types/pulse.js';
 import { Server } from '../../../server.js';
+import { Provider } from '../../../utils/provider.js';
+import { mockPulseMetricDefinitions } from '../mockPulseMetricDefinitions.js';
 import { getListAllPulseMetricDefinitionsTool } from './listAllPulseMetricDefinitions.js';
-
-const mockPulseMetricDefinitions: PulseMetricDefinition[] = [
-  {
-    metadata: { name: 'Pulse Metric 1', id: 'BBC908D8-29ED-48AB-A78E-ACF8A424C8C4' },
-    specification: { datasource: { id: 'A6FC3C9F-4F40-4906-8DB0-AC70C5FB5A11' } },
-    metrics: [
-      { id: 'CF32DDCC-362B-4869-9487-37DA4D152552', is_default: true, is_followed: false },
-      { id: 'CF32DDCC-362B-4869-9487-37DA4D152553', is_default: false, is_followed: true },
-    ],
-  } as PulseMetricDefinition,
-  {
-    metadata: { name: 'Pulse Metric 2', id: 'BBC908D8-29ED-48AB-A78E-ACF8A424C8C5' },
-    specification: { datasource: { id: 'A6FC3C9F-4F40-4906-8DB0-AC70C5FB5A12' } },
-    metrics: [{ id: 'CF32DDCC-362B-4869-9487-37DA4D152554', is_default: true, is_followed: false }],
-  } as PulseMetricDefinition,
-  {
-    metadata: { name: 'Pulse Metric 3', id: 'BBC908D8-29ED-48AB-A78E-ACF8A424C8C6' },
-    specification: { datasource: { id: 'A6FC3C9F-4F40-4906-8DB0-AC70C5FB5A11' } },
-    metrics: [],
-  } as unknown as PulseMetricDefinition,
-];
 
 const mocks = vi.hoisted(() => ({
   mockListAllPulseMetricDefinitions: vi.fn(),
@@ -36,6 +16,7 @@ vi.mock('../../../restApiInstance.js', () => ({
       pulseMethods: {
         listAllPulseMetricDefinitions: mocks.mockListAllPulseMetricDefinitions,
       },
+      siteId: 'test-site-id',
     }),
   ),
 }));
@@ -64,21 +45,39 @@ describe('listAllPulseMetricDefinitionsTool', () => {
     { view: 'DEFINITION_VIEW_FULL', label: 'full view' },
     { view: 'DEFINITION_VIEW_DEFAULT', label: 'default view' },
   ])('should list pulse metric definitions with $label', async ({ view }) => {
-    mocks.mockListAllPulseMetricDefinitions.mockResolvedValue(new Ok(mockPulseMetricDefinitions));
+    mocks.mockListAllPulseMetricDefinitions.mockResolvedValue(
+      new Ok({
+        pagination: { next_page_token: undefined },
+        definitions: mockPulseMetricDefinitions,
+      }),
+    );
     const result = await getToolResult({ view });
     expect(result.isError).toBe(false);
     const parsedValue = JSON.parse(result.content[0].text as string);
     expect(parsedValue).toEqual(mockPulseMetricDefinitions);
-    expect(mocks.mockListAllPulseMetricDefinitions).toHaveBeenCalledWith(view);
+    expect(mocks.mockListAllPulseMetricDefinitions).toHaveBeenCalledWith(
+      view,
+      undefined,
+      undefined,
+    );
   });
 
   it('should list pulse metric definitions with no view (default)', async () => {
-    mocks.mockListAllPulseMetricDefinitions.mockResolvedValue(new Ok(mockPulseMetricDefinitions));
+    mocks.mockListAllPulseMetricDefinitions.mockResolvedValue(
+      new Ok({
+        pagination: { next_page_token: undefined },
+        definitions: mockPulseMetricDefinitions,
+      }),
+    );
     const result = await getToolResult({});
     expect(result.isError).toBe(false);
     const parsedValue = JSON.parse(result.content[0].text as string);
     expect(parsedValue).toEqual(mockPulseMetricDefinitions);
-    expect(mocks.mockListAllPulseMetricDefinitions).toHaveBeenCalledWith(undefined);
+    expect(mocks.mockListAllPulseMetricDefinitions).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      undefined,
+    );
   });
 
   it('should handle API errors gracefully', async () => {
@@ -124,7 +123,8 @@ async function getToolResult(params: {
   view?: 'DEFINITION_VIEW_BASIC' | 'DEFINITION_VIEW_FULL' | 'DEFINITION_VIEW_DEFAULT';
 }): Promise<CallToolResult> {
   const listAllPulseMetricDefinitionsTool = getListAllPulseMetricDefinitionsTool(new Server());
-  return await listAllPulseMetricDefinitionsTool.callback(params, {
+  const callback = await Provider.from(listAllPulseMetricDefinitionsTool.callback);
+  return await callback(params, {
     signal: new AbortController().signal,
     requestId: 'test-request-id',
     sendNotification: vi.fn(),

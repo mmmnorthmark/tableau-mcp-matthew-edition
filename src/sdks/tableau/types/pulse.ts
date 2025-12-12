@@ -34,7 +34,7 @@ const pulseBasicSpecificationSchema = z.object({
 
 const pulseSpecificationSchema = z.object({
   datasource: pulseDatasourceSchema,
-  basic_specification: pulseBasicSpecificationSchema,
+  basic_specification: pulseBasicSpecificationSchema.optional(),
   viz_state_specification: z.object({ viz_state_string: z.string() }).optional(),
   is_running_total: z.boolean(),
 });
@@ -71,6 +71,7 @@ export const pulseMetricSchema = z.object({
   metric_version: z.coerce.number(),
   goals: pulseGoalsSchema.optional(),
   is_followed: z.boolean(),
+  datasource_luid: z.string(),
 });
 
 export const pulseRepresentationOptionsSchema = z.object({
@@ -107,9 +108,13 @@ export const comparisonSchema = z.object({
 
 export const datasourceGoalsSchema = z.array(
   z.object({
-    basic_specification: pulseBasicSpecificationSchema,
+    basic_specification: pulseBasicSpecificationSchema.optional(),
+    threshold_basic_specification: pulseBasicSpecificationSchema.optional(),
+    threshold_viz_state_specification: z.object({ viz_state_string: z.string() }).optional(),
     viz_state_specification: z.object({ viz_state_string: z.string() }).optional(),
     minimum_granularity: z.string(),
+    benchmark_sentiment_type: z.string(),
+    name: z.string(),
   }),
 );
 
@@ -345,6 +350,8 @@ export const pulseBundleResponseSchema = z.object({
     }),
   }),
 });
+
+export type PulseBundleResponse = z.infer<typeof pulseBundleResponseSchema>;
 
 export const pulseInsightBundleTypeEnum = ['ban', 'springboard', 'basic', 'detail'] as const;
 export type PulseInsightBundleType = (typeof pulseInsightBundleTypeEnum)[number];
