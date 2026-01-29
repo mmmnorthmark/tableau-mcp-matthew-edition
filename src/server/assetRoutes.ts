@@ -1,14 +1,12 @@
 import { Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
 import { Config } from '../config.js';
 import { log } from '../logging/log.js';
 import { Server } from '../server.js';
 import { AssetManager } from '../services/AssetManager.js';
-
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
+import { getDirname } from '../utils/getDirname.js';
 
 /**
  * Handle GET /mcp/assets requests
@@ -132,7 +130,7 @@ export async function handleDefaultsRequest(req: Request, res: Response): Promis
 
   try {
     // Read the default SVG file
-    const defaultsPath = path.join(__dirname, '..', '..', 'defaults', filename);
+    const defaultsPath = path.join(getDirname(), '..', 'defaults', filename);
     const svgData = await fs.readFile(defaultsPath, 'utf-8');
 
     res.setHeader('Content-Type', 'image/svg+xml');

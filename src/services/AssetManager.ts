@@ -1,13 +1,10 @@
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
 import { Config } from '../config.js';
 import { log } from '../logging/log.js';
 import { Server } from '../server.js';
-
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 export interface AssetMetadata {
   imageFilename?: string;
@@ -99,14 +96,15 @@ export class AssetManager {
    */
   private generateSignedUrl(assetId: string): string {
     // Calculate expiration timestamp
-    const expiresAt = Date.now() + (this.config.assetExpirationHours * 60 * 60 * 1000);
+    const expiresAt = Date.now() + this.config.assetExpirationHours * 60 * 60 * 1000;
     const expires = Math.floor(expiresAt / 1000); // Convert to seconds
 
     // Generate HMAC-SHA256 signature
     const signature = this.generateSignature(assetId, expires);
 
     // Construct the base URL from the MCP server URL (NOT the Tableau server)
-    const baseUrl = this.config.mcpServerUrl;
+    // Priority: server.mcpServerUrl (from X-Forwarded-Host) > config.mcpServerUrl (fallback)
+    const baseUrl = this.server?.mcpServerUrl || this.config.mcpServerUrl;
 
     // Build the full signed URL
     const url = `${baseUrl}/tableau-mcp/assets?assetId=${encodeURIComponent(assetId)}&expires=${expires}&sig=${signature}`;
