@@ -32,9 +32,10 @@ export function register(app: express.Application): void {
     if (
       !token_endpoint_auth_method ||
       typeof token_endpoint_auth_method !== 'string' ||
-      !['client_secret_basic', 'client_secret_post'].includes(token_endpoint_auth_method)
+      !['none', 'client_secret_basic', 'client_secret_post'].includes(token_endpoint_auth_method)
     ) {
-      token_endpoint_auth_method = 'client_secret_basic';
+      // Default to 'none' for public clients (like MCP clients using PKCE)
+      token_endpoint_auth_method = 'none';
     }
 
     // For public clients, we use a fixed client ID since no authentication is required

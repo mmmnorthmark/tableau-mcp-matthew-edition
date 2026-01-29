@@ -119,7 +119,8 @@ async function verifyAccessToken(
     }
 
     let tableauAuthInfo: TableauAuthInfo;
-    if (config.auth === 'oauth') {
+    // Google OAuth uses direct-trust, so tokens don't include Tableau OAuth fields
+    if (config.auth === 'oauth' && config.oauth.provider !== 'google') {
       const mcpAccessToken = mcpAccessTokenSchema.safeParse(payload);
       if (!mcpAccessToken.success) {
         return Err(`Invalid access token: ${fromError(mcpAccessToken.error).toString()}`);
