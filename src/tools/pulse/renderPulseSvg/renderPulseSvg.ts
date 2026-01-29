@@ -1,8 +1,24 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Ok } from 'ts-results-es';
-import * as vega from 'vega';
-import * as vegaLite from 'vega-lite';
 import z from 'zod';
+
+// Dynamic imports for vega/vega-lite to avoid top-level ESM issues in CommonJS bundle
+let vegaModule: typeof import('vega') | null = null;
+let vegaLiteModule: typeof import('vega-lite') | null = null;
+
+async function getVega(): Promise<typeof import('vega')> {
+  if (!vegaModule) {
+    vegaModule = await import('vega');
+  }
+  return vegaModule;
+}
+
+async function getVegaLite(): Promise<typeof import('vega-lite')> {
+  if (!vegaLiteModule) {
+    vegaLiteModule = await import('vega-lite');
+  }
+  return vegaLiteModule;
+}
 
 import { getConfig } from '../../../config.js';
 import { log } from '../../../logging/log.js';
@@ -630,6 +646,7 @@ async function renderVegaSpec(vegaSpec: any): Promise<{
   viewWidth: number;
   viewHeight: number;
 }> {
+  const vega = await getVega();
   const view = new vega.View(vega.parse(vegaSpec), {
     renderer: 'none',
     logLevel: vega.Warn,
@@ -676,6 +693,7 @@ export async function renderVegaLiteToSvg(
   };
 
   // 3) Compile Vega-Lite to Vega
+  const vegaLite = await getVegaLite();
   const vegaSpec: any = vegaLite.compile(transformedSpec).spec;
 
   // 4) Full bounds so strokes/labels at edges are included in layout
