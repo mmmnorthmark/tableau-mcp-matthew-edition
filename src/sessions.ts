@@ -6,19 +6,22 @@ import { ClientInfo } from './server.js';
 export type Session = {
   transport: StreamableHTTPServerTransport;
   clientInfo: ClientInfo;
+  mcpServerUrl?: string;
 };
 
 const sessions: { [sessionId: string]: Session } = {};
 
 export const createSession = ({
   clientInfo,
+  mcpServerUrl,
 }: {
   clientInfo: ClientInfo;
+  mcpServerUrl?: string;
 }): StreamableHTTPServerTransport => {
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (sessionId) => {
-      sessions[sessionId] = { transport, clientInfo };
+      sessions[sessionId] = { transport, clientInfo, mcpServerUrl };
     },
   });
 

@@ -41,11 +41,19 @@ export class Server extends McpServer {
   // With stdio transport, we can use the getClientVersion() method to get the client info.
   private readonly _clientInfo: ClientInfo | undefined;
 
+  // The MCP server URL to use for generating asset URLs.
+  // This is captured from X-Forwarded-Host headers at request time, or from MCP_SERVER_URL env var.
+  private readonly _mcpServerUrl: string | undefined;
+
   get clientInfo(): ClientInfo | undefined {
     return this._clientInfo ?? this.server.getClientVersion();
   }
 
-  constructor({ clientInfo }: { clientInfo?: ClientInfo } = {}) {
+  get mcpServerUrl(): string | undefined {
+    return this._mcpServerUrl;
+  }
+
+  constructor({ clientInfo, mcpServerUrl }: { clientInfo?: ClientInfo; mcpServerUrl?: string } = {}) {
     super(
       {
         name: serverName,
@@ -63,6 +71,7 @@ export class Server extends McpServer {
     this.name = serverName;
     this.version = serverVersion;
     this._clientInfo = clientInfo;
+    this._mcpServerUrl = mcpServerUrl;
   }
 
   registerTools = async (authInfo?: TableauAuthInfo): Promise<void> => {

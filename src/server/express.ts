@@ -13,11 +13,37 @@ import { createSession, getSession, Session } from '../sessions.js';
 import { handleAssetRequest, handleDefaultsRequest } from './assetRoutes.js';
 import { validateProtocolVersion } from './middleware.js';
 import { getTableauAuthInfo } from './oauth/getTableauAuthInfo.js';
-import { OAuthProvider } from './oauth/provider.js';
+import { createOAuthProvider } from './oauth/providers/index.js';
 import { TableauAuthInfo } from './oauth/schemas.js';
 import { AuthenticatedRequest } from './oauth/types.js';
 
 const SESSION_ID_HEADER = 'mcp-session-id';
+
+/**
+ * Compute the MCP server URL from the request headers or config.
+ *
+ * Priority:
+ * 1. MCP_SERVER_URL env var (explicit override via config.mcpServerUrlOverride)
+ * 2. X-Forwarded-Host + X-Forwarded-Proto from request (when trust proxy is enabled)
+ * 3. Fall back to config.mcpServerUrl (localhost:port)
+ */
+function getMcpServerUrlFromRequest(req: Request, config: Config): string {
+  // Explicit env var takes precedence
+  if (config.mcpServerUrlOverride) {
+    return config.mcpServerUrlOverride;
+  }
+
+  // Use Express's built-in handling (respects TRUST_PROXY_CONFIG)
+  // req.get('host') uses X-Forwarded-Host when trust proxy is enabled
+  // req.protocol uses X-Forwarded-Proto when trust proxy is enabled
+  const host = req.get('host');
+  if (host) {
+    return `${req.protocol}://${host}`;
+  }
+
+  // Fall back to localhost
+  return config.mcpServerUrl;
+}
 
 export async function startExpressServer({
   basePath,
@@ -55,7 +81,7 @@ export async function startExpressServer({
 
   const middleware: Array<RequestHandler> = [];
   if (config.oauth.enabled) {
-    const oauthProvider = new OAuthProvider();
+    const oauthProvider = createOAuthProvider();
     oauthProvider.setupRoutes(app);
     middleware.push(oauthProvider.authMiddleware);
     middleware.push(validateProtocolVersion);
@@ -123,8 +149,11 @@ export async function startExpressServer({
     try {
       let transport: StreamableHTTPServerTransport;
 
+      // Compute the MCP server URL from request headers (for asset URL generation)
+      const mcpServerUrl = getMcpServerUrlFromRequest(req, config);
+
       if (config.disableSessionManagement) {
-        const server = new Server();
+        const server = new Server({ mcpServerUrl });
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
         });
@@ -143,9 +172,9 @@ export async function startExpressServer({
           transport = session.transport;
         } else if (!sessionId && isInitializeRequest(req.body)) {
           const clientInfo = req.body.params.clientInfo;
-          transport = createSession({ clientInfo });
+          transport = createSession({ clientInfo, mcpServerUrl });
 
-          const server = new Server({ clientInfo });
+          const server = new Server({ clientInfo, mcpServerUrl });
           await connect(server, transport, logLevel, getTableauAuthInfo(req.auth));
         } else {
           // Invalid request
