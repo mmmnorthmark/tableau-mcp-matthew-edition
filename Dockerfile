@@ -6,8 +6,9 @@ WORKDIR /app
 COPY package.json package-lock.json tsconfig.json ./
 RUN npm ci --ignore-scripts
 
-# Copy source and build
+# Copy source and widget, then build
 COPY src ./src
+COPY widget ./widget
 RUN npm run build
 
 # Production stage

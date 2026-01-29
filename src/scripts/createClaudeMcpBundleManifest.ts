@@ -324,6 +324,15 @@ const envVars = {
     required: false,
     sensitive: false,
   },
+  MCP_SERVER_URL: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'MCP Server URL',
+    description:
+      'Explicit URL for the MCP server. When set, this takes precedence over X-Forwarded-Host headers. Used for generating asset URLs when behind a reverse proxy.',
+    required: false,
+    sensitive: false,
+  },
   DISABLE_LOG_MASKING: {
     includeInUserConfig: false,
     type: 'boolean',
