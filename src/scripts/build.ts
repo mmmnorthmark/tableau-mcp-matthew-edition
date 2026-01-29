@@ -16,6 +16,8 @@ const dev = process.argv.includes('--dev');
     format: 'cjs',
     minify: !dev,
     packages: dev ? 'external' : 'bundle',
+    // vega/canvas have native dependencies that can't be bundled
+    external: ['vega', 'vega-lite', 'canvas'],
     sourcemap: true,
     logLevel: dev ? 'debug' : 'info',
     logOverride: {
