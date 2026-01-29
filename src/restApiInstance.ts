@@ -27,19 +27,39 @@ type JwtScopes =
   | 'tableau:insight_metrics:read'
   | 'tableau:metric_subscriptions:read'
   | 'tableau:insights:read'
-  | 'tableau:views:download';
+  | 'tableau:views:download'
+  | 'tableau:insight_brief:create';
 
 const getNewRestApiInstanceAsync = async (
   config: Config,
   requestId: RequestId,
   server: Server,
   jwtScopes: Set<JwtScopes>,
+  signal: AbortSignal,
   authInfo?: TableauAuthInfo,
 ): Promise<RestApi> => {
+  signal.addEventListener(
+    'abort',
+    () => {
+      log.info(
+        server,
+        {
+          type: 'request-cancelled',
+          requestId,
+          reason: signal.reason,
+        },
+        { logger: server.name, requestId },
+      );
+    },
+    { once: true },
+  );
+
   const tableauServer = config.server || authInfo?.server;
   invariant(tableauServer, 'Tableau server could not be determined');
 
   const restApi = new RestApi(tableauServer, {
+    maxRequestTimeoutMs: config.maxRequestTimeoutMs,
+    signal,
     requestInterceptor: [
       getRequestInterceptor(server, requestId),
       getRequestErrorInterceptor(server, requestId),
@@ -98,12 +118,14 @@ export const useRestApi = async <T>({
   server,
   callback,
   jwtScopes,
+  signal,
   authInfo,
 }: {
   config: Config;
   requestId: RequestId;
   server: Server;
   jwtScopes: Array<JwtScopes>;
+  signal: AbortSignal;
   callback: (restApi: RestApi) => Promise<T>;
   authInfo?: TableauAuthInfo;
 }): Promise<T> => {
@@ -112,6 +134,7 @@ export const useRestApi = async <T>({
     requestId,
     server,
     new Set(jwtScopes),
+    signal,
     authInfo,
   );
   try {

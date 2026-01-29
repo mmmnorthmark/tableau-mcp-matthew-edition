@@ -4,8 +4,9 @@ import { z } from 'zod';
 import {
   pulseBundleRequestSchema,
   pulseBundleResponseSchema,
-  pulseDiscoverBriefSchema,
   pulseFollowedMetricsGroupsResponseSchema,
+  pulseInsightBriefRequestSchema,
+  pulseInsightBriefResponseSchema,
   pulseInsightBundleTypeEnum,
   pulseMetricDefinitionSchema,
   pulseMetricDefinitionViewEnum,
@@ -167,39 +168,27 @@ const getPulseSummaryRestEndpoint = makeEndpoint({
   response: pulseFollowedMetricsGroupsResponseSchema,
 });
 
-const generatePulseDiscoverBriefRestEndpoint = makeEndpoint({
+const generatePulseInsightBriefRestEndpoint = makeEndpoint({
   method: 'post',
   path: '/pulse/insights/brief',
-  alias: 'generatePulseDiscoverBrief',
-  description: 'Generates an AI-powered Pulse Discover brief answering questions about metrics.',
+  alias: 'generatePulseInsightBrief',
+  description:
+    'Generates an AI-powered insight brief for Pulse metrics based on natural language questions.',
   parameters: [
     {
-      name: 'body',
+      name: 'brief_request',
       type: 'Body',
-      schema: z.object({
-        language: z.string(),
-        locale: z.string(),
-        time_zone: z.string(),
-        messages: z.array(
-          z.object({
-            content: z.string(),
-            action_type: z.string(),
-            role: z.string(),
-            metric_group_context_resolved: z.boolean(),
-            metric_group_context: z.array(z.any()),
-          }),
-        ),
-      }),
+      schema: pulseInsightBriefRequestSchema,
     },
   ],
-  response: pulseDiscoverBriefSchema,
+  response: pulseInsightBriefResponseSchema,
 });
 
 const pulseApi = makeApi([
   generatePulseMetricValueInsightBundleRestEndpoint,
   getFollowedPulseMetricsGroupsRestEndpoint,
   getPulseSummaryRestEndpoint,
-  generatePulseDiscoverBriefRestEndpoint,
+  generatePulseInsightBriefRestEndpoint,
   listAllPulseMetricDefinitionsRestEndpoint,
   listPulseMetricDefinitionsFromMetricDefinitionIdsRestEndpoint,
   listPulseMetricsFromMetricDefinitionIdRestEndpoint,

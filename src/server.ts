@@ -88,12 +88,14 @@ export class Server extends McpServer {
           _meta,
         }, await Provider.from(callback));
       } else {
-        // Use standard tool() for regular tools
-        this.tool(
+        // Use standard registerTool for regular tools
+        this.registerTool(
           name,
-          await Provider.from(description),
-          await Provider.from(paramsSchema),
-          await Provider.from(annotations),
+          {
+            description: await Provider.from(description),
+            inputSchema: await Provider.from(paramsSchema),
+            annotations: await Provider.from(annotations),
+          },
           await Provider.from(callback),
         );
       }

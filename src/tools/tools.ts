@@ -1,6 +1,7 @@
 import { getSearchContentTool } from './contentExploration/searchContent.js';
 import { getGetDatasourceMetadataTool } from './getDatasourceMetadata/getDatasourceMetadata.js';
 import { getListDatasourcesTool } from './listDatasources/listDatasources.js';
+import { getGeneratePulseInsightBriefTool } from './pulse/generateInsightBrief/generatePulseInsightBriefTool.js';
 import { getGeneratePulseMetricValueInsightBundleTool } from './pulse/generateMetricValueInsightBundle/generatePulseMetricValueInsightBundleTool.js';
 import { getGeneratePulseDiscoverBriefTool } from './pulse/generateDiscoverBrief/index.js';
 import { getFollowedPulseMetricsTool } from './pulse/getFollowedMetrics/index.js';
@@ -30,6 +31,7 @@ export const toolFactories = [
   getListPulseMetricsFromMetricIdsTool,
   getListPulseMetricSubscriptionsTool,
   getGeneratePulseMetricValueInsightBundleTool,
+  getGeneratePulseInsightBriefTool,
   getGeneratePulseDiscoverBriefTool,
   getFollowedPulseMetricsTool,
   getRenderPulseMetricTool,

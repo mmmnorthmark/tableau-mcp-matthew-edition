@@ -173,27 +173,84 @@ be available.
 
 <hr />
 
+## `MAX_REQUEST_TIMEOUT_MS`
+
+The maximum timeout for requests to the Tableau Server REST API.
+
+- Default: `600000` (10 minutes)
+- Must be a positive number between `5000` (5 seconds) and `3600000` (1 hour).
+
+<hr />
+
 ## `MAX_RESULT_LIMIT`
 
-If a tool has a `limit` parameter and returns an array of items, the maximum length of that array.
+The maximum number of results that every tool with a `limit` parameter can return when no
+tool-specific max result limit is set in the [`MAX_RESULT_LIMITS`](#max_result_limits) environment
+variable.
+
+:::warning
+
+Take care when setting this value and be sure to set appropriate tool-specific limits in the
+[`MAX_RESULT_LIMITS`](#max_result_limits) environment variable.
+
+:::
 
 - Default: Empty string (_no limit_)
 - Must be a positive number.
 
 <hr />
 
+## `MAX_RESULT_LIMITS`
+
+A comma-separated list of tool names (or tool group names) and the maximum number of results that
+each tool (or tools in the group) can return.
+
+:::info
+
+Example:
+
+```
+MAX_RESULT_LIMIT=30
+MAX_RESULT_LIMITS=query-datasource:1000,list-datasources:20
+```
+
+This means that:
+
+- The `query-datasource` tool can return up to 1000 results.
+- The `list-datasources` tool can return up to 20 data sources.
+- Every other tool is limited to 30 results.
+
+:::
+
+- Default: Empty string (_no limits_)
+- For a list of available tools and groups, see
+  [toolName.ts](https://github.com/tableau/tableau-mcp/blob/main/src/tools/toolName.ts).
+- Only applies to tools that have a `limit` parameter and return an array of items.
+- Tool names take precedence over tool group names. That is, `datasource:1000,list-datasources:20`
+  means that the `list-datasources` tool can return up to 20 data sources but the `query-datasource`
+  tool can only return up to 1000 results.
+- If a tool-specific limit is not set, the global limit specified by the
+  [`MAX_RESULT_LIMIT`](#max_result_limit) environment variable will be used instead.
+- Each limit must be a positive number.
+
+<hr />
+
 ## `DISABLE_QUERY_DATASOURCE_VALIDATION_REQUESTS`
 
-Disables requests that are made to the VizQl Data Service for validating queries in the [`query-datasource`](../../tools/data-qna/query-datasource.md) tool. Does not disable the ability to query the datasource.
+Disables requests that are made to the VizQl Data Service for validating queries in the
+[`query-datasource`](../../tools/data-qna/query-datasource.md) tool. Does not disable the ability to
+query the datasource.
 
 - Default: `false`
-- When `true`, skips validation of queries against metadata results and validation of SET and MATCH filters.
+- When `true`, skips validation of queries against metadata results and validation of SET and MATCH
+  filters.
 
 <hr />
 
 ## `DISABLE_QUERY_DATASOURCE_FILTER_VALIDATION`
 
-Note: This environment variable was deprecated in Tableau MCP `v1.13.0` and replaced by `DISABLE_QUERY_DATASOURCE_VALIDATION_REQUESTS`.
+Note: This environment variable was deprecated in Tableau MCP `v1.13.0` and replaced by
+`DISABLE_QUERY_DATASOURCE_VALIDATION_REQUESTS`.
 
 Disable validation of SET and MATCH filter values in the
 [`query-datasource`](../../tools/data-qna/query-datasource.md) tool.
@@ -245,6 +302,43 @@ variable.
 - Must be a positive number between `1` and `168` (7 days).
 
 <hr />
+
+## `TELEMETRY_PROVIDER`
+
+The telemetry provider to use for metrics collection.
+
+- Default: `noop`
+- Possible values:
+  - `noop` - No telemetry (default)
+  - `custom` - Use a custom telemetry provider (requires
+    [`TELEMETRY_PROVIDER_CONFIG`](#telemetry_provider_config))
+
+<hr />
+
+## `TELEMETRY_PROVIDER_CONFIG`
+
+Configuration for the custom telemetry provider. Required when
+[`TELEMETRY_PROVIDER`](#telemetry_provider) is `custom`.
+
+- Format: JSON string with at least a `module` field
+- The `module` field should be a path to a JavaScript file or npm package that exports a class
+  implementing the `TelemetryProvider` interface.
+
+**Example:**
+
+```bash
+TELEMETRY_PROVIDER_CONFIG='{"module": "./my-telemetry-provider.js"}'
+```
+
+The custom provider module should export a default class (or named export `TelemetryProvider`) that
+implements:
+
+```typescript
+interface TelemetryProvider {
+  initialize(): void;
+  recordMetric(name: string, value: number, attributes: Record<string, unknown>): void;
+}
+```
 
 [mcp-transport]: https://modelcontextprotocol.io/docs/concepts/transports
 [tab-ds-connections]:

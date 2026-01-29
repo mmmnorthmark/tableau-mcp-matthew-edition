@@ -2,7 +2,7 @@ import { Zodios } from '@zodios/core';
 import { Err, Ok, Result } from 'ts-results-es';
 import z from 'zod';
 
-import { isAxiosError } from '../../../utils/axios.js';
+import { AxiosRequestConfig, isAxiosError } from '../../../utils/axios.js';
 import { pulseApis } from '../apis/pulseApi.js';
 import { Credentials } from '../types/credentials.js';
 import { PulsePagination } from '../types/pagination.js';
@@ -12,6 +12,8 @@ import {
   PulseBundleResponse,
   PulseDiscoverBrief,
   PulseFollowedMetricsGroupsResponse,
+  pulseInsightBriefRequestSchema,
+  PulseInsightBriefResponse,
   PulseInsightBundleType,
   PulseMetric,
   PulseMetricDefinition,
@@ -29,8 +31,8 @@ import AuthenticatedMethods from './authenticatedMethods.js';
  * @link https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_pulse.htm
  */
 export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis> {
-  constructor(baseUrl: string, creds: Credentials) {
-    super(new Zodios(baseUrl, pulseApis), creds);
+  constructor(baseUrl: string, creds: Credentials, axiosConfig: AxiosRequestConfig) {
+    super(new Zodios(baseUrl, pulseApis, { axiosConfig }), creds);
   }
 
   /**
@@ -146,6 +148,26 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
         ...this.authHeader,
       });
       return response.subscriptions ?? [];
+    });
+  };
+
+  /**
+   * Generates an AI-powered insight brief for Pulse metrics based on natural language questions.
+   *
+   * Required scopes: `tableau:insight_brief:create`
+   *
+   * @param briefRequest - The request to generate an insight brief for.
+   * @link https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_pulse.htm#EmbeddingsService_GenerateInsightBrief
+   */
+  generatePulseInsightBrief = async (
+    briefRequest: z.infer<typeof pulseInsightBriefRequestSchema>,
+  ): Promise<PulseResult<PulseInsightBriefResponse>> => {
+    return await guardAgainstPulseDisabled(async () => {
+      const response = await this._apiClient.generatePulseInsightBrief(
+        briefRequest,
+        this.authHeader,
+      );
+      return response;
     });
   };
 
@@ -294,8 +316,8 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
         };
       });
 
-      // Call the API
-      const response = await this._apiClient.generatePulseDiscoverBrief(
+      // Call the API using the upstream generatePulseInsightBrief endpoint
+      const response = await this._apiClient.generatePulseInsightBrief(
         {
           language: 'LANGUAGE_EN_US',
           locale: 'LOCALE_EN_US',
@@ -317,7 +339,11 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
         throw new Error(`Failed to generate discover brief: No markup returned`);
       }
 
-      return response;
+      // Map PulseInsightBriefResponse to PulseDiscoverBrief
+      return {
+        markup: response.markup,
+        follow_up_questions: response.follow_up_questions,
+      };
     });
   };
 

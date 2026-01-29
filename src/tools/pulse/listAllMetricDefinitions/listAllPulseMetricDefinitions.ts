@@ -65,7 +65,7 @@ Retrieves a list of all published Pulse Metric Definitions using the Tableau RES
     },
     callback: async (
       { view, limit, pageSize },
-      { requestId, authInfo },
+      { requestId, authInfo, signal },
     ): Promise<CallToolResult> => {
       const config = getConfig();
       return await listAllPulseMetricDefinitionsTool.logAndExecute({
@@ -78,12 +78,16 @@ Retrieves a list of all published Pulse Metric Definitions using the Tableau RES
             requestId,
             server,
             jwtScopes: ['tableau:insight_definitions_metrics:read'],
+            signal,
             authInfo: getTableauAuthInfo(authInfo),
             callback: async (restApi) => {
+              const maxResultLimit = config.getMaxResultLimit(
+                listAllPulseMetricDefinitionsTool.name,
+              );
               const definitions = await pulsePaginate({
                 config: {
-                  limit: config.maxResultLimit
-                    ? Math.min(config.maxResultLimit, limit ?? Number.MAX_SAFE_INTEGER)
+                  limit: maxResultLimit
+                    ? Math.min(maxResultLimit, limit ?? Number.MAX_SAFE_INTEGER)
                     : limit,
                   pageSize,
                 },
