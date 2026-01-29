@@ -67,10 +67,12 @@ export class Config {
   assetStoragePath: string;
   assetExpirationHours: number;
   mcpServerUrl: string;
+  mcpServerUrlOverride: string | undefined;
   boundedContext: BoundedContext;
   tableauServerVersionCheckIntervalInHours: number;
   oauth: {
     enabled: boolean;
+    provider: 'tableau' | 'google';
     issuer: string;
     redirectUri: string;
     jwePrivateKey: string;
@@ -81,6 +83,10 @@ export class Config {
     refreshTokenTimeoutMs: number;
     clientIdSecretPairs: Record<string, string> | null;
     dnsServers: string[];
+    // Google OAuth specific
+    googleClientId: string;
+    googleClientSecret: string;
+    allowedGoogleEmails: string[];
   };
 
   constructor() {
@@ -125,6 +131,7 @@ export class Config {
       MCP_ASSET_CORS_ORIGINS: assetCorsOrigins,
       MCP_ASSET_STORAGE_PATH: assetStoragePath,
       MCP_ASSET_EXPIRATION_HOURS: assetExpirationHours,
+      MCP_SERVER_URL: mcpServerUrl,
       INCLUDE_PROJECT_IDS: includeProjectIds,
       INCLUDE_DATASOURCE_IDS: includeDatasourceIds,
       INCLUDE_WORKBOOK_IDS: includeWorkbookIds,
@@ -140,6 +147,10 @@ export class Config {
       OAUTH_AUTHORIZATION_CODE_TIMEOUT_MS: authzCodeTimeoutMs,
       OAUTH_ACCESS_TOKEN_TIMEOUT_MS: accessTokenTimeoutMs,
       OAUTH_REFRESH_TOKEN_TIMEOUT_MS: refreshTokenTimeoutMs,
+      OAUTH_PROVIDER: oauthProvider,
+      GOOGLE_CLIENT_ID: googleClientId,
+      GOOGLE_CLIENT_SECRET: googleClientSecret,
+      ALLOWED_GOOGLE_EMAILS: allowedGoogleEmails,
     } = cleansedVars;
 
     let jwtUsername = '';
@@ -198,8 +209,10 @@ export class Config {
     );
 
     const disableOauthOverride = disableOauth === 'true';
+    const parsedOauthProvider = oauthProvider === 'google' ? 'google' : 'tableau';
     this.oauth = {
       enabled: disableOauthOverride ? false : !!oauthIssuer,
+      provider: parsedOauthProvider,
       issuer: oauthIssuer ?? '',
       redirectUri: redirectUri || (oauthIssuer ? `${oauthIssuer}/Callback` : ''),
       jwePrivateKey: oauthJwePrivateKey ?? '',
@@ -232,6 +245,12 @@ export class Config {
             return acc;
           }, {})
         : null,
+      // Google OAuth specific
+      googleClientId: googleClientId ?? '',
+      googleClientSecret: googleClientSecret ?? '',
+      allowedGoogleEmails: allowedGoogleEmails
+        ? allowedGoogleEmails.split(',').map((email) => email.trim().toLowerCase())
+        : [],
     };
 
     this.auth = isAuthType(auth) ? auth : this.oauth.enabled ? 'oauth' : 'pat';
@@ -284,6 +303,18 @@ export class Config {
       if (this.transport === 'stdio') {
         throw new Error('TRANSPORT must be "http" when OAUTH_ISSUER is set');
       }
+
+      // Google OAuth specific validation
+      if (this.oauth.provider === 'google') {
+        invariant(
+          this.oauth.googleClientId,
+          'The environment variable GOOGLE_CLIENT_ID is required when OAUTH_PROVIDER is "google"',
+        );
+        invariant(
+          this.oauth.googleClientSecret,
+          'The environment variable GOOGLE_CLIENT_SECRET is required when OAUTH_PROVIDER is "google"',
+        );
+      }
     }
 
     const maxResultLimitNumber = maxResultLimit ? parseInt(maxResultLimit) : NaN;
@@ -308,8 +339,10 @@ export class Config {
       throw new Error('Cannot include and exclude tools simultaneously');
     }
 
-    // TODO: mcpServerUrl should use X-Forwarded-Host header from reverse proxy
-    // or allow override via MCP_SERVER_URL environment variable instead of hardcoding localhost
+    // MCP_SERVER_URL can be used to explicitly set the server URL (takes precedence over X-Forwarded-Host)
+    // The actual URL used will be determined at request time using X-Forwarded-Host headers when available
+    // This fallback is only used when no override is set and no X-Forwarded-Host header is present
+    this.mcpServerUrlOverride = mcpServerUrl?.trim() || undefined;
     this.mcpServerUrl = `http://localhost:${this.httpPort}`;
 
     // Asset serving configuration

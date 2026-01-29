@@ -720,6 +720,54 @@ describe('Config', () => {
     });
   });
 
+  describe('MCP Server URL config parsing', () => {
+    it('should set mcpServerUrl to localhost fallback when MCP_SERVER_URL is not set', () => {
+      process.env = {
+        ...process.env,
+        ...defaultEnvVars,
+      };
+
+      const config = new Config();
+      expect(config.mcpServerUrl).toMatch(/^http:\/\/localhost:\d+$/);
+      expect(config.mcpServerUrlOverride).toBeUndefined();
+    });
+
+    it('should set mcpServerUrlOverride when MCP_SERVER_URL is provided', () => {
+      process.env = {
+        ...process.env,
+        ...defaultEnvVars,
+        MCP_SERVER_URL: 'https://my-mcp-server.example.com',
+      };
+
+      const config = new Config();
+      expect(config.mcpServerUrlOverride).toBe('https://my-mcp-server.example.com');
+      // mcpServerUrl still holds the localhost fallback
+      expect(config.mcpServerUrl).toMatch(/^http:\/\/localhost:\d+$/);
+    });
+
+    it('should trim whitespace from MCP_SERVER_URL', () => {
+      process.env = {
+        ...process.env,
+        ...defaultEnvVars,
+        MCP_SERVER_URL: '  https://my-mcp-server.example.com  ',
+      };
+
+      const config = new Config();
+      expect(config.mcpServerUrlOverride).toBe('https://my-mcp-server.example.com');
+    });
+
+    it('should set mcpServerUrlOverride to undefined when MCP_SERVER_URL is empty string', () => {
+      process.env = {
+        ...process.env,
+        ...defaultEnvVars,
+        MCP_SERVER_URL: '',
+      };
+
+      const config = new Config();
+      expect(config.mcpServerUrlOverride).toBeUndefined();
+    });
+  });
+
   describe('Connected App config parsing', () => {
     const defaultDirectTrustEnvVars = {
       ...defaultEnvVars,
@@ -1026,6 +1074,7 @@ describe('Config', () => {
 
     const defaultOAuthConfig = {
       enabled: true,
+      provider: 'tableau',
       clientIdSecretPairs: null,
       issuer: defaultOAuthEnvVars.OAUTH_ISSUER,
       redirectUri: `${defaultOAuthEnvVars.OAUTH_ISSUER}/Callback`,
@@ -1034,6 +1083,9 @@ describe('Config', () => {
       jwePrivateKeyPassphrase: undefined,
       dnsServers: ['1.1.1.1', '1.0.0.1'],
       ...defaultOAuthTimeoutMs,
+      googleClientId: '',
+      googleClientSecret: '',
+      allowedGoogleEmails: [],
     } as const;
 
     it('should default to disabled', () => {
@@ -1045,6 +1097,7 @@ describe('Config', () => {
       const config = new Config();
       expect(config.oauth).toEqual({
         enabled: false,
+        provider: 'tableau',
         issuer: '',
         clientIdSecretPairs: null,
         redirectUri: '',
@@ -1053,6 +1106,9 @@ describe('Config', () => {
         jwePrivateKeyPassphrase: undefined,
         dnsServers: ['1.1.1.1', '1.0.0.1'],
         ...defaultOAuthTimeoutMs,
+        googleClientId: '',
+        googleClientSecret: '',
+        allowedGoogleEmails: [],
       });
     });
 
