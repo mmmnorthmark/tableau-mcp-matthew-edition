@@ -158,16 +158,13 @@ describe('queryDatasourceTool', () => {
       data: 'hamburgers',
     };
 
-    mocks.mockQueryDatasource.mockImplementation(() => {
-      const zodiosError = new ZodiosError(
-        'Zodios: Invalid response from endpoint',
-        undefined,
-        badResponse,
-        queryOutputSchema.safeParse(badResponse).error,
-      );
-
-      return new Err(zodiosError);
-    });
+    const zodiosError = new ZodiosError(
+      'Zodios: Invalid response from endpoint',
+      undefined,
+      badResponse,
+      queryOutputSchema.safeParse(badResponse).error,
+    );
+    mocks.mockQueryDatasource.mockResolvedValue(new Err(zodiosError));
 
     const result = await getToolResult();
 

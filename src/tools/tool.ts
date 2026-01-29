@@ -263,11 +263,16 @@ function getErrorResult(requestId: RequestId, error: unknown): CallToolResult {
   }
 
   if (error instanceof ZodiosError) {
-    console.error(`[Tool Error] Zodios error details:`, {
-      status: error.status,
-      cause: error.cause,
-      data: JSON.stringify(error.data, null, 2),
-    });
+    try {
+      console.error(`[Tool Error] Zodios error details:`, {
+        status: error.status,
+        cause: String(error.cause),
+        data: JSON.stringify(error.data, null, 2),
+      });
+    } catch {
+      // Ignore logging errors - the cause object may have issues with inspection
+      console.error(`[Tool Error] Zodios error (cause logging failed)`);
+    }
   }
 
   if (error instanceof ZodiosError && isZodErrorLike(error.cause)) {

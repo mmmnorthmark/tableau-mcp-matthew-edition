@@ -23,6 +23,7 @@ describe('AssetManager', () => {
       assetExpirationHours: 24,
       assetCorsOrigins: ['https://claude.ai'],
       server: 'https://test-server.com',
+      mcpServerUrl: 'https://test-server.com/mcp',
     } as Config;
 
     assetManager = new AssetManager(config);
@@ -42,7 +43,7 @@ describe('AssetManager', () => {
       const data = Buffer.from('<svg>test</svg>', 'utf-8');
       const result = await assetManager.store(data, 'svg');
 
-      expect(result.url).toContain('https://test-server.com/mcp/assets');
+      expect(result.url).toContain('https://test-server.com/mcp/tableau-mcp/assets');
       expect(result.url).toContain('assetId=');
       expect(result.url).toContain('expires=');
       expect(result.url).toContain('sig=');
