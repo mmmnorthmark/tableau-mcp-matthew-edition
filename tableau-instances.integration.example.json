@@ -1,0 +1,41 @@
+[
+  {
+    "name": "cloud-pat-site-a",
+    "server": "https://prod-us-west-2a.online.tableau.com",
+    "siteName": "site-a",
+    "auth": "pat",
+    "patName": "your-pat-name",
+    "patValue": "your-pat-token",
+    "enabled": true,
+    "priority": 10,
+    "maxConcurrentRequests": 10,
+    "requestTimeout": 30000
+  },
+  {
+    "name": "cloud-pat-site-b",
+    "server": "https://prod-us-west-2b.online.tableau.com",
+    "siteName": "site-b",
+    "auth": "pat",
+    "patName": "your-other-pat-name",
+    "patValue": "your-other-pat-token",
+    "enabled": true,
+    "priority": 8,
+    "maxConcurrentRequests": 10,
+    "requestTimeout": 30000
+  },
+  {
+    "name": "cloud-connected-app",
+    "server": "https://prod-ap-southeast-2a.online.tableau.com",
+    "siteName": "",
+    "auth": "direct-trust",
+    "jwtSubClaim": "search-service@company.com",
+    "connectedAppClientId": "your-client-id",
+    "connectedAppSecretId": "your-secret-id",
+    "connectedAppSecretValue": "your-secret-value",
+    "jwtAdditionalPayload": "{}",
+    "enabled": true,
+    "priority": 5,
+    "maxConcurrentRequests": 10,
+    "requestTimeout": 30000
+  }
+]

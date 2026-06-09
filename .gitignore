@@ -1,5 +1,6 @@
 *.local
 .env
+.env.integration
 build/
 node_modules/
 junit/
@@ -8,4 +9,6 @@ config.json
 env.list
 manifest.json
 tableau-mcp.dxt
+tableau-instances.local.json
+**/tableau-instances.*.local.json
 LOCAL_NOTES.md

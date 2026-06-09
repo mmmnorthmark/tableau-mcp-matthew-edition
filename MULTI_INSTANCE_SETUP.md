@@ -233,3 +233,7 @@ If `TABLEAU_INSTANCES` is not set, the server operates in legacy single-instance
 ## 📝 Examples
 
 See `config.multi-instance.example.json` and `env.multi-instance.example` for complete configuration examples.
+
+## Live integration tests
+
+For validating PAT and connected-app authentication against real Tableau servers, see [INTEGRATION_TESTS.md](INTEGRATION_TESTS.md).

@@ -5,6 +5,7 @@ export default defineConfig({
     globals: true,
     watch: false,
     include: ['src/**/*.test.ts'],
+    exclude: ['**/*.integration.test.ts'],
     setupFiles: './src/testSetup.ts',
     reporters: [
       [
