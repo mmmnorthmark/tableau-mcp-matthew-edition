@@ -10,5 +10,6 @@ env.list
 manifest.json
 tableau-mcp.dxt
 tableau-instances.local.json
+tableau-instances.json
 **/tableau-instances.*.local.json
 LOCAL_NOTES.md
