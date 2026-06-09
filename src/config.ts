@@ -46,6 +46,7 @@ export class Config {
   excludeTools: Array<ToolName>;
   maxResultLimit: number | null;
   disableQueryDatasourceFilterValidation: boolean;
+  datasourceCredentials: string;
   
   // Multi-instance configuration
   instances: TableauInstance[];
@@ -144,6 +145,7 @@ export class Config {
       EXCLUDE_TOOLS: excludeTools,
       MAX_RESULT_LIMIT: maxResultLimit,
       DISABLE_QUERY_DATASOURCE_FILTER_VALIDATION: disableQueryDatasourceFilterValidation,
+      DATASOURCE_CREDENTIALS: datasourceCredentials,
       SEARCH_CACHE_TTL: searchCacheTtl,
       MAX_CONCURRENT_SEARCHES: maxConcurrentSearches,
       SEARCH_TIMEOUT: searchTimeout,
@@ -175,6 +177,7 @@ export class Config {
     this.defaultLogLevel = defaultLogLevel ?? 'debug';
     this.disableLogMasking = disableLogMasking === 'true';
     this.disableQueryDatasourceFilterValidation = disableQueryDatasourceFilterValidation === 'true';
+    this.datasourceCredentials = datasourceCredentials?.trim() ?? '';
 
     const maxResultLimitNumber = maxResultLimit ? parseInt(maxResultLimit) : NaN;
     this.maxResultLimit =

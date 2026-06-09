@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Config, exportedForTesting } from './config.js';
-import { InstanceManager } from './instanceManager.js';
 import { RequestCache } from './requestCache.js';
 
 const { validateTableauInstance } = exportedForTesting;
@@ -127,8 +126,7 @@ describe('Multi-Instance Configuration', () => {
       ]);
 
       const config = new Config();
-      
-      expect(config.legacyMode).toBe(false);
+
       expect(config.instances).toHaveLength(2);
       expect(config.instances[0].name).toBe('prod');
       expect(config.instances[0].priority).toBe(10);
@@ -136,18 +134,13 @@ describe('Multi-Instance Configuration', () => {
       expect(config.instances[1].priority).toBe(5);
     });
 
-    it('should use legacy mode when TABLEAU_INSTANCES is not set', () => {
-      // Don't set TABLEAU_INSTANCES
-      process.env.SERVER = 'https://tableau.company.com';
-      process.env.AUTH = 'pat';
-      process.env.PAT_NAME = 'test-pat';
-      process.env.PAT_VALUE = 'test-token';
+    it('should throw when TABLEAU_INSTANCES and CONFIG_FILE_PATH are missing', () => {
+      delete process.env.TABLEAU_INSTANCES;
+      delete process.env.CONFIG_FILE_PATH;
 
-      const config = new Config();
-      
-      expect(config.legacyMode).toBe(true);
-      expect(config.instances).toHaveLength(0);
-      expect(config.server).toBe('https://tableau.company.com');
+      expect(() => new Config()).toThrow(
+        'Tableau instance configuration required. Set either TABLEAU_INSTANCES or CONFIG_FILE_PATH environment variable.',
+      );
     });
 
     it('should reject invalid JSON in TABLEAU_INSTANCES', () => {
@@ -156,10 +149,11 @@ describe('Multi-Instance Configuration', () => {
       expect(() => new Config()).toThrow('Failed to parse TABLEAU_INSTANCES');
     });
 
-    it('should reject empty instances array', () => {
+    it('should allow an empty instances array', () => {
       process.env.TABLEAU_INSTANCES = '[]';
 
-      expect(() => new Config()).toThrow('At least one Tableau instance must be configured');
+      const config = new Config();
+      expect(config.instances).toHaveLength(0);
     });
 
     it('should set search configuration defaults', () => {

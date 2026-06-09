@@ -70,6 +70,11 @@ Manage user impersonation settings, validation rules, and audit logging for the 
 - Clear statistics: operation: "clear-stats"
 `,
     paramsSchema,
+    annotations: {
+      title: 'Manage User Impersonation',
+      readOnlyHint: false,
+      openWorldHint: false,
+    },
     callback: async ({ operation, userValidationConfig, auditLoggingConfig }, { requestId }): Promise<CallToolResult> => {
       const userValidator = getUserValidator();
       const auditLogger = getAuditLogger(server);

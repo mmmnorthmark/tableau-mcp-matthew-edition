@@ -1,7 +1,7 @@
 import { RequestId } from '@modelcontextprotocol/sdk/types.js';
 
 import { isAxiosError } from '../node_modules/axios/index.js';
-import { Config, getConfig } from './config.js';
+import { Config, getConfig, TableauInstance } from './config.js';
 import { log, shouldLogWhenLevelIsAtLeast } from './logging/log.js';
 import { maskRequest, maskResponse } from './logging/secretMask.js';
 import {
@@ -27,13 +27,22 @@ type JwtScopes =
   | 'tableau:insights:read'
   | 'tableau:views:download';
 
+const getPrimaryInstance = (config: Config): TableauInstance => {
+  const instance = config.instances.find((i) => i.enabled) ?? config.instances[0];
+  if (!instance) {
+    throw new Error('No Tableau instances configured');
+  }
+  return instance;
+};
+
 const getNewRestApiInstanceAsync = async (
   config: Config,
   requestId: RequestId,
   server: Server,
   jwtScopes: Set<JwtScopes>,
 ): Promise<RestApi> => {
-  const restApi = new RestApi(config.server, {
+  const instance = getPrimaryInstance(config);
+  const restApi = new RestApi(instance.server, {
     requestInterceptor: [
       getRequestInterceptor(server, requestId),
       getRequestErrorInterceptor(server, requestId),
@@ -44,23 +53,23 @@ const getNewRestApiInstanceAsync = async (
     ],
   });
 
-  if (config.auth === 'pat') {
+  if (instance.auth === 'pat') {
     await restApi.signIn({
       type: 'pat',
-      patName: config.patName,
-      patValue: config.patValue,
-      siteName: config.siteName,
+      patName: instance.patName!,
+      patValue: instance.patValue!,
+      siteName: instance.siteName ?? '',
     });
-  } else if (config.auth === 'direct-trust') {
+  } else if (instance.auth === 'direct-trust') {
     await restApi.signIn({
       type: 'direct-trust',
-      siteName: config.siteName,
-      username: getJwtSubClaim(config),
-      clientId: config.connectedAppClientId,
-      secretId: config.connectedAppSecretId,
-      secretValue: config.connectedAppSecretValue,
+      siteName: instance.siteName ?? '',
+      username: instance.jwtSubClaim!,
+      clientId: instance.connectedAppClientId!,
+      secretId: instance.connectedAppSecretId!,
+      secretValue: instance.connectedAppSecretValue!,
       scopes: jwtScopes,
-      additionalPayload: getJwtAdditionalPayload(config),
+      additionalPayload: JSON.parse(instance.jwtAdditionalPayload || '{}'),
     });
   }
 
@@ -195,13 +204,4 @@ function logResponse(
   } as const;
 
   log.info(server, messageObj, { logger: 'rest-api', requestId });
-}
-
-function getJwtSubClaim(config: Config): string {
-  return config.jwtSubClaim;
-}
-
-function getJwtAdditionalPayload(config: Config): Record<string, unknown> {
-  const json = config.jwtAdditionalPayload;
-  return JSON.parse(json || '{}');
 }
