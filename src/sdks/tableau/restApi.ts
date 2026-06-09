@@ -52,7 +52,8 @@ export default class RestApi {
       responseInterceptor: [ResponseInterceptor, ErrorInterceptor?];
     }>,
   ) {
-    this._host = host;
+    // Normalize host URL by removing trailing slash
+    this._host = host.endsWith('/') ? host.slice(0, -1) : host;
     this._baseUrl = `${this._host}/api/${RestApi._version}`;
     this._baseUrlWithoutVersion = `${this._host}/api/-`;
     this._requestInterceptor = options?.requestInterceptor;
@@ -92,8 +93,8 @@ export default class RestApi {
 
   get contentExplorationMethods(): ContentExplorationMethods {
     if (!this._contentExplorationMethods) {
-      this._contentExplorationMethods = new ContentExplorationMethods(this._baseUrlWithoutVersion, this.creds);
-      this._addInterceptors(this._baseUrlWithoutVersion, this._contentExplorationMethods.interceptors);
+      this._contentExplorationMethods = new ContentExplorationMethods(this._host, this.creds);
+      this._addInterceptors(this._host, this._contentExplorationMethods.interceptors);
     }
 
     return this._contentExplorationMethods;

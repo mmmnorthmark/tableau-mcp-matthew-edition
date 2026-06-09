@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { getConfig } from '../../config.js';
 import { InstanceManager } from '../../instanceManager.js';
-import { getCachedSearchResults, setCachedSearchResults, getCacheConfig } from '../../requestCache.js';
+import { getCachedSearchResults, setCachedSearchResults, getCacheConfig, generateSearchCacheKey } from '../../requestCache.js';
 import { getConfigManager, initializeConfigManager } from '../../configManager.js';
 import { getUserValidator } from '../../utils/userValidation.js';
 import { getAuditLogger } from '../../utils/auditLogger.js';
@@ -121,7 +121,12 @@ When \`userEmail\` is provided, the tool will authenticate as that user across a
           const finalContentTypes = (contentTypes && contentTypes.length > 0) ? contentTypes : ['workbooks', 'views', 'datasources'];
           const finalMaxResults = maxResults || 20;
           
-          // Debug the parameters
+          // Debug the parameters - log the actual query being searched
+          await log.debug(server, `SEARCH DEBUG: Starting search with query: "${query}"`, {
+            logger: 'search-content',
+            requestId: String(requestId)
+          });
+          
           await log.debug(server, `Search parameters received: contentTypes=${JSON.stringify(contentTypes)}, finalContentTypes=${JSON.stringify(finalContentTypes)}`, {
             logger: 'search-content',
             requestId: String(requestId)
@@ -165,12 +170,28 @@ When \`userEmail\` is provided, the tool will authenticate as that user across a
             
             // Log warnings if any
             if (validationResult.warnings && validationResult.warnings.length > 0) {
-              console.warn(`User validation warnings for ${userEmail}:`, validationResult.warnings);
+              await log.warning(server, `User validation warnings for ${userEmail}: ${JSON.stringify(validationResult.warnings)}`, {
+                logger: 'search-content',
+                requestId: String(requestId)
+              });
             }
           }
           
           // Check cache first if caching is enabled and not ignored (include userEmail in cache key)
           if (cacheConfig.enableRequestCaching && !ignoreCache) {
+            // Generate cache key for debugging
+            const cacheKey = generateSearchCacheKey(query, finalContentTypes, filters);
+            
+            await log.debug(server, `CACHE DEBUG: Checking cache for key: "${cacheKey}"`, {
+              logger: 'search-content',
+              requestId: String(requestId)
+            });
+            
+            await log.debug(server, `CACHE DEBUG: Cache key components - query: "${query}", contentTypes: ${JSON.stringify(finalContentTypes)}, filters: "${filters || ''}"`, {
+              logger: 'search-content',
+              requestId: String(requestId)
+            });
+            
             const cachedResults = getCachedSearchResults<SearchResult>(
               query,
               finalContentTypes,
@@ -178,6 +199,26 @@ When \`userEmail\` is provided, the tool will authenticate as that user across a
             );
             
             if (cachedResults) {
+              await log.debug(server, `CACHE DEBUG: Found cached results with ${cachedResults.length} items for query: "${query}"`, {
+                logger: 'search-content',
+                requestId: String(requestId)
+              });
+              
+              // Log the first few cached results to debug
+              if (cachedResults.length > 0) {
+                const firstCachedResult = cachedResults[0];
+                await log.debug(server, `First cached result: name="${firstCachedResult.name}", contentType="${firstCachedResult.contentType}"`, {
+                  logger: 'search-content',
+                  requestId: String(requestId)
+                });
+                
+                const cachedTitles = cachedResults.slice(0, 3).map(r => r.name);
+                await log.debug(server, `First 3 cached result names: ${JSON.stringify(cachedTitles)}`, {
+                  logger: 'search-content',
+                  requestId: String(requestId)
+                });
+              }
+              
               // Log cached search request
               auditLogger.logSearchRequest(
                 query,
@@ -196,7 +237,17 @@ When \`userEmail\` is provided, the tool will authenticate as that user across a
               // Return cached results, limited to maxResults
               const limitedResults = cachedResults.slice(0, finalMaxResults);
               return new Ok(limitedResults);
+            } else {
+              await log.debug(server, `CACHE DEBUG: No cached results found for key: "${cacheKey}"`, {
+                logger: 'search-content',
+                requestId: String(requestId)
+              });
             }
+          } else {
+            await log.debug(server, `CACHE DEBUG: Cache disabled or ignored - enableRequestCaching: ${cacheConfig.enableRequestCaching}, ignoreCache: ${ignoreCache}`, {
+              logger: 'search-content',
+              requestId: String(requestId)
+            });
           }
           
           // Initialize or get ConfigManager
@@ -244,6 +295,18 @@ When \`userEmail\` is provided, the tool will authenticate as that user across a
             
             // Cache the results if caching is enabled and not ignored
             if (cacheConfig.enableRequestCaching && !ignoreCache) {
+              const cacheKey = generateSearchCacheKey(query, finalContentTypes, filters);
+              
+              await log.debug(server, `CACHE DEBUG: Storing results in cache with key: "${cacheKey}"`, {
+                logger: 'search-content',
+                requestId: String(requestId)
+              });
+              
+              await log.debug(server, `CACHE DEBUG: Storing ${results.length} results with TTL: ${cacheConfig.searchCacheTtl}ms`, {
+                logger: 'search-content',
+                requestId: String(requestId)
+              });
+              
               setCachedSearchResults(
                 query,
                 finalContentTypes,
@@ -252,6 +315,11 @@ When \`userEmail\` is provided, the tool will authenticate as that user across a
                 [], // instanceNames
                 cacheConfig.searchCacheTtl
               );
+            } else {
+              await log.debug(server, `CACHE DEBUG: Not storing results in cache - enableRequestCaching: ${cacheConfig.enableRequestCaching}, ignoreCache: ${ignoreCache}`, {
+                logger: 'search-content',
+                requestId: String(requestId)
+              });
             }
             
             // Log successful search request
@@ -372,8 +440,16 @@ async function performUnifiedSearch(
     allResults.push(...contentTypeResults);
   }
   
+  // Deduplicate results based on instance name, content type, and ID
+  const uniqueResults = deduplicateResults(allResults);
+  
+  await log.debug(server, `performUnifiedSearch: after deduplication, ${uniqueResults.length} unique results from ${allResults.length} total results`, {
+    logger: 'search-content',
+    requestId: String(requestId)
+  });
+  
   // Rank and sort results
-  const rankedResults = rankSearchResults(allResults, query);
+  const rankedResults = rankSearchResults(uniqueResults, query);
   
   // Apply max results limit
   return rankedResults.slice(0, maxResults);
@@ -408,14 +484,36 @@ async function searchContentType(
         requestId: String(requestId)
       });
       
+      // Log the original query to make sure it's being passed correctly
+      await log.debug(server, `Original search query: "${query}"`, {
+        logger: 'search-content',
+        requestId: String(requestId)
+      });
+      
       // Use the Content Exploration API for unified search
       const searchResponse = await connection.restApi.contentExplorationMethods.getSearch(searchParams);
       
-      // Log the search response
+      // Log the search response with detailed information
       await log.debug(server, `Content Exploration API search completed on ${connection.instance.name}: found ${searchResponse.hits.items.length} results`, {
         logger: 'search-content',
         requestId: String(requestId)
       });
+      
+      // Log the first few results to debug what's being returned
+      if (searchResponse.hits.items.length > 0) {
+        const firstResult = searchResponse.hits.items[0];
+        await log.debug(server, `First result from API: title="${firstResult.content.title}", type="${firstResult.content.type}", score=${firstResult.score}`, {
+          logger: 'search-content',
+          requestId: String(requestId)
+        });
+        
+        // Log all result titles to see what we're getting
+        const resultTitles = searchResponse.hits.items.map(item => item.content.title).slice(0, 5);
+        await log.debug(server, `First 5 result titles: ${JSON.stringify(resultTitles)}`, {
+          logger: 'search-content',
+          requestId: String(requestId)
+        });
+      }
       
       for (const item of searchResponse.hits.items) {
         const relevanceScore = calculateRelevanceScore(item, query);
@@ -506,6 +604,23 @@ function calculateRelevanceScore(item: any, query: string): number {
   if (item.content.favoritesTotal > 0) score += Math.min(item.content.favoritesTotal, 5);
   
   return score;
+}
+
+function deduplicateResults(results: SearchResult[]): SearchResult[] {
+  const seen = new Set<string>();
+  const uniqueResults: SearchResult[] = [];
+  
+  for (const result of results) {
+    // Create a unique key based on instance name, content type, and ID
+    const key = `${result.instanceName}:${result.contentType}:${result.id}`;
+    
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueResults.push(result);
+    }
+  }
+  
+  return uniqueResults;
 }
 
 function rankSearchResults(results: SearchResult[], query: string): SearchResult[] {

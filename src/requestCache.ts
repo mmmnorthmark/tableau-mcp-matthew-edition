@@ -192,3 +192,8 @@ export function getCacheConfig() {
     enableRequestCaching: config.enableRequestCaching,
   };
 }
+
+// Function to clear search cache (useful for debugging)
+export function clearSearchCache(): void {
+  searchCache.clear();
+}

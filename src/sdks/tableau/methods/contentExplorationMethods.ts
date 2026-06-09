@@ -45,12 +45,14 @@ export default class ContentExplorationMethods extends AuthenticatedMethods<type
     pageNumber?: number;
   }): Promise<SearchResults> => {
     // Build query parameters, omitting undefined values
-    const queryParams: Record<string, any> = { term };
-    if (contentType) queryParams.contentType = contentType;
-    if (projectId) queryParams.projectId = projectId;
-    if (tags) queryParams.tags = tags;
-    if (pageSize) queryParams.pageSize = pageSize;
-    if (pageNumber) queryParams.pageNumber = pageNumber;
+    const queryParams = {
+      term,
+      ...(contentType && { contentType }),
+      ...(projectId && { projectId }),
+      ...(tags && { tags }),
+      ...(pageSize && { pageSize }),
+      ...(pageNumber && { pageNumber }),
+    };
     
     const response = await this._apiClient.getSearch({
       queries: queryParams,
