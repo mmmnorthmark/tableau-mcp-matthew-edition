@@ -20,6 +20,8 @@ import { getFeatureGate } from './features/init.js';
 import { getTableauServerInfo } from './getTableauServerInfo.js';
 import { registerPrompts } from './prompts/index.js';
 import { ClientInfo, Server } from './server.js';
+import { identityContext } from './server/auth/identityJwtVerifier.js';
+import { getRequiredRoleForTool, requireRole } from './server/auth/roleAuthz.js';
 import { getTableauAuthInfo } from './server/oauth/getTableauAuthInfo.js';
 import { TableauAuthInfo } from './server/oauth/schemas.js';
 import { getRequestOverridesFromHeader, X_TABLEAU_MCP_CONFIG_HEADER } from './server/requestUtils';
@@ -60,6 +62,15 @@ export class WebMcpServer extends Server {
           throw new ServiceUnavailableError(
             'The Tableau MCP server is temporarily unavailable. Please try again later.',
           );
+        }
+
+        // Role-based authorization for identity-gateway requests: only
+        // enforced when a verified gateway identity is present on this
+        // request AND role groups are configured via env vars (requireRole
+        // is a no-op otherwise). Throws InsufficientScopeError on denial.
+        const gatewayIdentity = identityContext.getStore();
+        if (gatewayIdentity) {
+          requireRole(getRequiredRoleForTool(tool.name), gatewayIdentity, tool.name);
         }
 
         const requestOverridesHeader =
