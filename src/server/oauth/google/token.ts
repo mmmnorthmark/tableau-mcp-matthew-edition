@@ -32,7 +32,7 @@ export function googleToken(
 ): void {
   const config = getConfig();
 
-  app.post('/oauth/token', async (req, res) => {
+  app.post('/oauth2/token', async (req, res) => {
     const result = mcpTokenSchema.safeParse(req.body);
 
     if (!result.success) {
@@ -81,7 +81,11 @@ export function googleToken(
 
           // Generate tokens
           const refreshTokenId = randomBytes(32).toString('hex');
-          const accessToken = await createGoogleAccessToken(authCode.user, authCode.clientId, publicKey);
+          const accessToken = await createGoogleAccessToken(
+            authCode.user,
+            authCode.clientId,
+            publicKey,
+          );
 
           refreshTokens.set(refreshTokenId, {
             user: authCode.user,

@@ -44,7 +44,9 @@ export class AssetManager {
   async store(data: Buffer, extension: string, metadata?: AssetMetadata): Promise<StoreResult> {
     // Check if asset serving is disabled
     if (this.config.assetStrategy === 'disabled') {
-      throw new Error('Asset serving is disabled. Set MCP_ASSET_STRATEGY to "inline", "local", or "s3" to enable asset generation.');
+      throw new Error(
+        'Asset serving is disabled. Set MCP_ASSET_STRATEGY to "inline", "local", or "s3" to enable asset generation.',
+      );
     }
 
     // Generate a unique asset ID (UUID)
@@ -58,7 +60,10 @@ export class AssetManager {
       const dataStr = data.toString('utf-8');
 
       if (this.server) {
-        log.info(this.server, `[AssetManager] Returning inline asset: ${assetId} (${data.length} bytes)`);
+        log.info(
+          this.server,
+          `[AssetManager] Returning inline asset: ${assetId} (${data.length} bytes)`,
+        );
       }
 
       return { url: dataStr, assetId };
@@ -166,10 +171,7 @@ export class AssetManager {
       return 'invalid';
     }
 
-    const isValid = crypto.timingSafeEqual(
-      Buffer.from(calculatedSig),
-      Buffer.from(providedSig),
-    );
+    const isValid = crypto.timingSafeEqual(Buffer.from(calculatedSig), Buffer.from(providedSig));
 
     if (!isValid) {
       if (this.server) {
@@ -189,6 +191,7 @@ export class AssetManager {
    */
   static sanitizeFilename(filename: string): string {
     // Remove path separators and null bytes
+    // eslint-disable-next-line no-control-regex
     let sanitized = filename.replace(/[/\\<>:"|?*\x00-\x1F]/g, '_');
 
     // Limit length to 255 characters (filesystem limit)

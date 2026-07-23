@@ -2,7 +2,7 @@ import { Zodios } from '@zodios/core';
 
 import { AxiosRequestConfig } from '../../../utils/axios.js';
 import { workbooksApis } from '../apis/workbooksApi.js';
-import { Credentials } from '../types/credentials.js';
+import { RestApiCredentials } from '../restApi.js';
 import { Pagination } from '../types/pagination.js';
 import { Workbook } from '../types/workbook.js';
 import AuthenticatedMethods from './authenticatedMethods.js';
@@ -15,7 +15,7 @@ import AuthenticatedMethods from './authenticatedMethods.js';
  * @link https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_workbooks_and_views.htm
  */
 export default class WorkbooksMethods extends AuthenticatedMethods<typeof workbooksApis> {
-  constructor(baseUrl: string, creds: Credentials, axiosConfig: AxiosRequestConfig) {
+  constructor(baseUrl: string, creds: RestApiCredentials, axiosConfig: AxiosRequestConfig) {
     super(new Zodios(baseUrl, workbooksApis, { axiosConfig }), creds);
   }
 
@@ -74,5 +74,58 @@ export default class WorkbooksMethods extends AuthenticatedMethods<typeof workbo
       pagination: response.pagination,
       workbooks: response.workbooks.workbook ?? [],
     };
+  };
+
+  /**
+   * Deletes the specified workbook from the site.
+   *
+   * On Tableau Cloud the workbook is moved to the recycle bin and can be restored
+   * for a limited time before permanent removal.
+   *
+   * Required scopes (Tableau Cloud): `tableau:workbooks:delete`
+   *
+   * @param workbookId - The ID of the workbook to delete.
+   * @param siteId - The Tableau site ID
+   * @link https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_workbooks_and_views.htm#delete_workbook
+   */
+  deleteWorkbook = async ({
+    workbookId,
+    siteId,
+  }: {
+    workbookId: string;
+    siteId: string;
+  }): Promise<void> => {
+    await this._apiClient.deleteWorkbook(undefined, {
+      params: { siteId, workbookId },
+      ...this.authHeader,
+    });
+  };
+
+  /**
+   * Adds one or more tags to the specified workbook.
+   *
+   * Required scopes (Tableau Cloud): `tableau:workbook_tags:update`
+   *
+   * @param workbookId - The ID of the workbook to tag.
+   * @param siteId - The Tableau site ID
+   * @param tagLabels - The tag labels to add.
+   * @link https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_workbooks_and_views.htm#add_tags_to_workbook
+   */
+  addTagsToWorkbook = async ({
+    workbookId,
+    siteId,
+    tagLabels,
+  }: {
+    workbookId: string;
+    siteId: string;
+    tagLabels: ReadonlyArray<string>;
+  }): Promise<void> => {
+    await this._apiClient.addTagsToWorkbook(
+      { tags: { tag: tagLabels.map((label) => ({ label })) } },
+      {
+        params: { siteId, workbookId },
+        ...this.authHeader,
+      },
+    );
   };
 }

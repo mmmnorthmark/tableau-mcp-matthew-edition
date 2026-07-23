@@ -21,7 +21,7 @@ const pulseFilterSchema = z.object({
     z.object({
       string_value: z.string().optional(),
       bool_value: z.boolean().optional(),
-      null_value: z.string().optional(),
+      null_value: z.string().nullable().optional(),
     }),
   ),
 });
@@ -41,14 +41,14 @@ const pulseSpecificationSchema = z.object({
 
 export const pulseExtensionOptionsSchema = z
   .object({
-    allowed_dimensions: z.array(z.string()),
-    allowed_granularities: z.array(z.string()),
-    offset_from_today: z.number(),
+    allowed_dimensions: z.array(z.string()).optional(),
+    allowed_granularities: z.array(z.string()).optional(),
+    offset_from_today: z.number().optional(),
   })
   .passthrough();
 
 export const pulseMetricSpecificationSchema = z.object({
-  filters: z.array(pulseFilterSchema),
+  filters: z.array(pulseFilterSchema).optional(),
   measurement_period: z
     .object({
       granularity: z.string(),
@@ -76,24 +76,28 @@ export const pulseMetricSchema = z.object({
 
 export const pulseRepresentationOptionsSchema = z.object({
   type: z.string(),
-  number_units: z.object({
-    singular_noun: z.string(),
-    plural_noun: z.string(),
-  }),
-  sentiment_type: z.string(),
-  row_level_id_field: z.object({ identifier_col: z.string() }).passthrough(),
-  row_level_entity_names: z.object({
-    entity_name_singular: z.string().optional(),
-    entity_name_plural: z.string().optional(),
-  }),
-  row_level_name_field: z.object({ name_col: z.string() }).passthrough(),
-  currency_code: z.string(),
+  number_units: z
+    .object({
+      singular_noun: z.string().optional(),
+      plural_noun: z.string().optional(),
+    })
+    .optional(),
+  sentiment_type: z.string().optional(),
+  row_level_id_field: z.object({ identifier_col: z.string().optional() }).passthrough().optional(),
+  row_level_entity_names: z
+    .object({
+      entity_name_singular: z.string().optional(),
+      entity_name_plural: z.string().optional(),
+    })
+    .optional(),
+  row_level_name_field: z.object({ name_col: z.string().optional() }).passthrough().optional(),
+  currency_code: z.string().optional(),
 });
 
 export const insightOptionsSchema = z
   .object({
     show_insights: z.boolean().optional(),
-    settings: z.array(z.object({ type: z.string(), disabled: z.boolean() })),
+    settings: z.array(z.object({ type: z.string(), disabled: z.boolean() })).optional(),
   })
   .passthrough();
 
@@ -308,22 +312,22 @@ export const metricGroupContextSchema = z.array(
   z.object({
     metadata: z.object({
       name: z.string(),
-      metric_id: z.string(),
-      definition_id: z.string(),
+      metric_id: z.string().optional(),
+      definition_id: z.string().optional(),
     }),
     metric: z.object({
       definition: pulseSpecificationSchema,
       metric_specification: pulseMetricSpecificationSchema,
-      extension_options: pulseExtensionOptionsSchema,
-      representation_options: pulseRepresentationOptionsSchema,
-      insights_options: insightOptionsSchema,
+      extension_options: pulseExtensionOptionsSchema.optional(),
+      representation_options: pulseRepresentationOptionsSchema.optional(),
+      insights_options: insightOptionsSchema.optional(),
       goals: z
         .object({
           datasource_goals: datasourceGoalsSchema.optional(),
           metric_goals: pulseGoalsSchema.optional(),
         })
         .optional(),
-      candidates: z.array(pulseCorrelationCandidateDefinitionSchema),
+      candidates: z.array(pulseCorrelationCandidateDefinitionSchema).optional(),
     }),
   }),
 );
@@ -355,22 +359,23 @@ export const pulseBundleRequestSchema = z.object({
     }),
     input: z.object({
       metadata: z.object({
-        name: z.string().nonempty(),
-        metric_id: z.string().nonempty(),
-        definition_id: z.string().nonempty(),
+        name: z.string().optional(),
+        metric_id: z.string().optional(),
+        definition_id: z.string().optional(),
       }),
       metric: z.object({
         definition: z.object({
           datasource: z.object({
             id: z.string(),
+            id_type: z.enum(['DATASOURCE_ID_TYPE_WORKBOOK_DATASOURCE']).optional(),
           }),
           basic_specification: pulseBasicSpecificationSchema,
           is_running_total: z.boolean(),
         }),
         metric_specification: pulseMetricSpecificationSchema,
-        extension_options: pulseExtensionOptionsSchema,
-        representation_options: pulseRepresentationOptionsSchema,
-        insights_options: insightOptionsSchema,
+        extension_options: pulseExtensionOptionsSchema.optional(),
+        representation_options: pulseRepresentationOptionsSchema.optional(),
+        insights_options: insightOptionsSchema.optional(),
         goals: pulseGoalsSchema.optional(),
       }),
     }),

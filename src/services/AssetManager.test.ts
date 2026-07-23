@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -33,7 +32,7 @@ describe('AssetManager', () => {
     // Clean up temporary directory
     try {
       await fs.rm(tempDir, { recursive: true, force: true });
-    } catch (error) {
+    } catch {
       // Ignore errors during cleanup
     }
   });

@@ -120,7 +120,8 @@ export async function handleAssetRequest(
  * Serves the default error SVG files
  */
 export async function handleDefaultsRequest(req: Request, res: Response): Promise<void> {
-  const { filename } = req.params;
+  const filenameParam = req.params.filename;
+  const filename = Array.isArray(filenameParam) ? filenameParam[0] : filenameParam;
 
   // Validate filename
   if (!filename || !['vizImageExpired.svg', 'vizImageNotFound.svg'].includes(filename)) {
@@ -136,7 +137,7 @@ export async function handleDefaultsRequest(req: Request, res: Response): Promis
     res.setHeader('Content-Type', 'image/svg+xml');
     res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
     res.status(200).send(svgData);
-  } catch (error) {
+  } catch {
     res.status(404).send('Not found');
   }
 }
@@ -148,7 +149,7 @@ export async function handleDefaultsRequest(req: Request, res: Response): Promis
  * @param statusCode - HTTP status code (403 Forbidden, 410 Gone, etc.)
  * @param statusText - Status text for logging
  */
-function respondWithError(res: Response, statusCode: number, statusText: string): void {
+function respondWithError(res: Response, statusCode: number, _statusText: string): void {
   const errorImage =
     statusCode === 410 ? '/defaults/vizImageExpired.svg' : '/defaults/vizImageNotFound.svg';
 

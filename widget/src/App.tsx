@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState } from 'react';
 import vegaEmbed from 'vega-embed';
 import type { PulseMetricData, Insight } from './types';
@@ -200,16 +201,19 @@ export default function App() {
 
     // Log all insights with viz to help identify the time series one
     const allVizInsights = allInsights.filter((insight) => insight.result?.viz);
-    console.log('[Pulse Widget] All insights with viz:', allVizInsights.map(i => ({
-      insight_type: i.insight_type,
-      result_type: i.result?.type,
-      has_viz: !!i.result?.viz
-    })));
+    console.log(
+      '[Pulse Widget] All insights with viz:',
+      allVizInsights.map((i) => ({
+        insight_type: i.insight_type,
+        result_type: i.result?.type,
+        has_viz: !!i.result?.viz,
+      })),
+    );
 
     // Look for 'currenttrend' insight which contains the time series visualization
-    const vizInsight = allVizInsights.find((insight) =>
-      insight.insight_type === 'currenttrend'
-    ) || allVizInsights[0];
+    const vizInsight =
+      allVizInsights.find((insight) => insight.insight_type === 'currenttrend') ||
+      allVizInsights[0];
 
     console.log('[Pulse Widget] Selected viz insight:', vizInsight);
 

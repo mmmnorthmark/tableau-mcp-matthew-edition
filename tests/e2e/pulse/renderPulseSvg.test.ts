@@ -2,7 +2,7 @@ import z from 'zod';
 
 import { getPulseDefinition } from '../../constants.js';
 import { getDefaultEnv, resetEnv, setEnv } from '../../testEnv.js';
-import { callTool } from '../client.js';
+import { McpClient } from '../mcpClient.js';
 
 // Schema for the render-pulse-svg tool output
 const renderPulseSvgResultSchema = z.object({
@@ -17,15 +17,25 @@ const renderPulseSvgResultSchema = z.object({
 });
 
 describe('render-pulse-svg', () => {
+  let client: McpClient;
+
   beforeAll(setEnv);
   afterAll(resetEnv);
+
+  beforeAll(async () => {
+    client = new McpClient();
+    await client.connect();
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
 
   it('should render a pulse metric to SVG with all insight types', async () => {
     const env = getDefaultEnv();
     const tableauMcpDefinition = getPulseDefinition(env.SERVER, env.SITE_NAME, 'Tableau MCP');
 
-    const result = await callTool('render-pulse-svg', {
-      env,
+    const result = await client.callTool('render-pulse-svg', {
       schema: renderPulseSvgResultSchema,
       toolArgs: {
         metricId: tableauMcpDefinition.metrics[0].id,
@@ -54,8 +64,7 @@ describe('render-pulse-svg', () => {
     const env = getDefaultEnv();
     const tableauMcpDefinition = getPulseDefinition(env.SERVER, env.SITE_NAME, 'Tableau MCP');
 
-    const result = await callTool('render-pulse-svg', {
-      env,
+    const result = await client.callTool('render-pulse-svg', {
       schema: renderPulseSvgResultSchema,
       toolArgs: {
         metricId: tableauMcpDefinition.metrics[0].id,
@@ -84,8 +93,7 @@ describe('render-pulse-svg', () => {
     const customWidth = 1600;
     const customHeight = 900;
 
-    const result = await callTool('render-pulse-svg', {
-      env,
+    const result = await client.callTool('render-pulse-svg', {
       schema: renderPulseSvgResultSchema,
       toolArgs: {
         metricId: tableauMcpDefinition.metrics[0].id,

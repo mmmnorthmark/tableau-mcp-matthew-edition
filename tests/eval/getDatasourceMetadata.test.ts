@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import z from 'zod';
 
 import { dataSourceSchema } from '../../src/sdks/tableau/types/dataSource.js';
-import { fieldsResultSchema } from '../../src/tools/getDatasourceMetadata/datasourceMetadataUtils.js';
+import { fieldsResultSchema } from '../../src/tools/web/getDatasourceMetadata/datasourceMetadataUtils.js';
 import invariant from '../../src/utils/invariant.js';
 import { Datasource } from '../constants.js';
 import { getDefaultEnv, getSuperstoreDatasource, resetEnv, setEnv } from '../testEnv.js';
@@ -92,10 +92,14 @@ describe('get-datasource-metadata', () => {
       'get_datasource_metadata tool execution not found',
     );
 
-    const { fields } = getCallToolResult(getDatasourceMetadataToolExecution, fieldsResultSchema);
-    expect(fields.length).toBeGreaterThan(0);
+    const { fieldGroups } = getCallToolResult(
+      getDatasourceMetadataToolExecution,
+      fieldsResultSchema,
+    );
+    const flatFields = fieldGroups.flatMap((group) => group.fields ?? []);
+    expect(flatFields.length).toBeGreaterThan(0);
 
-    const fieldNames = fields.map((field) => field.name);
+    const fieldNames = flatFields.map((field) => field.name);
     expect(fieldNames).toContain('Postal Code');
     expect(fieldNames).toContain('Product Name');
   });

@@ -3,12 +3,13 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Install all dependencies and skip lifecycle scripts
-COPY package.json package-lock.json tsconfig.json ./
+COPY package.json package-lock.json tsconfig.json tsconfig.providers.json ./
 RUN npm ci --ignore-scripts
 
 # Copy source and widget, then build
 COPY src ./src
 COPY widget ./widget
+COPY features.json ./
 RUN npm run build
 
 # Production stage

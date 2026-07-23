@@ -125,7 +125,8 @@ export function googleCallback(
       console.error('Google OAuth callback error:', error);
       res.status(500).json({
         error: 'server_error',
-        error_description: 'Internal server error during authorization. Contact your administrator.',
+        error_description:
+          'Internal server error during authorization. Contact your administrator.',
       });
     }
   });

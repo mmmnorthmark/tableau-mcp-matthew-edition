@@ -1,42 +1,6 @@
 import { z } from 'zod';
 
 /**
- * Telemetry provider interface for metrics collection.
- */
-export interface TelemetryProvider {
-  /**
-   * Initialize the telemetry provider.
-   */
-  initialize(): void;
-
-  /**
-   * Record a custom metric with the given name and attributes.
-   *
-   * @param name - The metric name (e.g., 'mcp.tool.calls')
-   * @param value - The metric value (default: 1 for counters)
-   * @param attributes - Dimensions/tags for the metric
-   *
-   * @example
-   * ```typescript
-   * telemetry.recordMetric('mcp.tool.calls', 1, {
-   *   tool_name: 'list-pulse-metric-subscriptions',
-   * });
-   * ```
-   */
-  recordMetric(name: string, value: number, attributes: TelemetryAttributes): void;
-}
-
-/**
- * Schema for telemetry attributes.
- * Values can be strings, numbers, booleans, or undefined.
- */
-export const telemetryAttributesSchema = z.record(
-  z.string(),
-  z.union([z.string(), z.number(), z.boolean(), z.undefined()]),
-);
-export type TelemetryAttributes = z.infer<typeof telemetryAttributesSchema>;
-
-/**
  * Valid telemetry provider names
  */
 export const telemetryProviderSchema = z.enum(['noop', 'custom']);

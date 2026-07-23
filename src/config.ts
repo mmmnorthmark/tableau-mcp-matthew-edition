@@ -2,45 +2,35 @@ import { CorsOptions } from 'cors';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
+import { BaseConfig, removeClaudeMcpBundleUserConfigTemplates } from './config.shared.js';
+import {
+  FeatureGateConfig,
+  isFeatureGateProvider,
+  providerConfigSchema as featureGateProviderConfigSchema,
+} from './features/types.js';
 import { isTelemetryProvider, providerConfigSchema, TelemetryConfig } from './telemetry/types.js';
-import { isToolGroupName, isToolName, toolGroups, ToolName } from './tools/toolName.js';
-import { isTransport, TransportName } from './transports.js';
+import { isTransport } from './transports.js';
 import { getDirname } from './utils/getDirname.js';
 import invariant from './utils/invariant.js';
+import { milliseconds } from './utils/milliseconds.js';
+import { parseNumber } from './utils/parseNumber.js';
 
 const __dirname = getDirname();
-
-export const TEN_MINUTES_IN_MS = 10 * 60 * 1000;
-export const ONE_HOUR_IN_MS = 60 * 60 * 1000;
-export const ONE_DAY_IN_MS = 24 * 60 * 60 * 1000;
-export const THIRTY_DAYS_IN_MS = 30 * 24 * 60 * 60 * 1000;
-export const ONE_YEAR_IN_MS = 365.25 * 24 * 60 * 60 * 1000;
 
 const authTypes = ['pat', 'uat', 'direct-trust', 'oauth'] as const;
 type AuthType = (typeof authTypes)[number];
 
 function isAuthType(auth: unknown): auth is AuthType {
-  return !!authTypes.find((type) => type === auth);
+  return authTypes.some((type) => type === auth);
 }
 
-export type BoundedContext = {
-  projectIds: Set<string> | null;
-  datasourceIds: Set<string> | null;
-  workbookIds: Set<string> | null;
-};
-
-export class Config {
-  private maxResultLimit: number | null;
-  private maxResultLimits: Map<ToolName, number | null> | null;
-
+export class Config extends BaseConfig {
   auth: AuthType;
   server: string;
-  transport: TransportName;
   sslKey: string;
   sslCert: string;
   httpPort: number;
   corsOriginConfig: CorsOptions['origin'];
-  trustProxyConfig: boolean | number | string | null;
   siteName: string;
   patName: string;
   patValue: string;
@@ -55,16 +45,7 @@ export class Config {
   uatKeyId: string;
   jwtAdditionalPayload: string;
   datasourceCredentials: string;
-  defaultLogLevel: string;
-  disableLogMasking: boolean;
-  includeTools: Array<ToolName>;
-  excludeTools: Array<ToolName>;
-  maxRequestTimeoutMs: number;
-  disableQueryDatasourceValidationRequests: boolean;
-  disableMetadataApiRequests: boolean;
   disableSessionManagement: boolean;
-  enableServerLogging: boolean;
-  serverLogDirectory: string;
   assetStrategy: 'disabled' | 'inline' | 'local' | 's3';
   assetSecretKey: string;
   assetCorsOrigins: string[];
@@ -72,13 +53,20 @@ export class Config {
   assetExpirationHours: number;
   mcpServerUrl: string;
   mcpServerUrlOverride: string | undefined;
-  boundedContext: BoundedContext;
   tableauServerVersionCheckIntervalInHours: number;
+  passthroughAuthUserSessionCheckIntervalInMinutes: number;
+  mcpSiteSettingsCheckIntervalInMinutes: number;
+  enableMcpSiteSettings: boolean;
+  allowSitesToConfigureRequestOverrides: boolean;
+  enablePassthroughAuth: boolean;
   oauth: {
     enabled: boolean;
     provider: 'tableau' | 'google';
+    embeddedAuthzServer: boolean;
     issuer: string;
     redirectUri: string;
+    resourceUri: string;
+    globalResourceUris: string[];
     lockSite: boolean;
     jwePrivateKey: string;
     jwePrivateKeyPath: string;
@@ -92,14 +80,24 @@ export class Config {
     googleClientId: string;
     googleClientSecret: string;
     allowedGoogleEmails: string[];
+    enforceScopes: boolean;
+    advertiseApiScopes: boolean;
   };
   telemetry: TelemetryConfig;
-
-  getMaxResultLimit(toolName: ToolName): number | null {
-    return this.maxResultLimits?.get(toolName) ?? this.maxResultLimit;
-  }
+  latencyMetricName: string;
+  productTelemetryEndpoint: string;
+  productTelemetryEnabled: boolean;
+  isHyperforce: boolean;
+  featureGate: FeatureGateConfig;
+  breakGlassDisableGlobally: boolean;
+  adminToolsEnabled: boolean;
+  flowToolsEnabled: boolean;
+  insightsToolsEnabled: boolean;
+  cspAllowedDomains: string[];
 
   constructor() {
+    super();
+
     const cleansedVars = removeClaudeMcpBundleUserConfigTemplates(process.env);
     const {
       AUTH: auth,
@@ -110,7 +108,6 @@ export class Config {
       SSL_CERT: sslCert,
       HTTP_PORT_ENV_VAR_NAME: httpPortEnvVarName,
       CORS_ORIGIN_CONFIG: corsOriginConfig,
-      TRUST_PROXY_CONFIG: trustProxyConfig,
       PAT_NAME: patName,
       PAT_VALUE: patValue,
       JWT_SUB_CLAIM: jwtSubClaim,
@@ -126,37 +123,33 @@ export class Config {
       UAT_KEY_ID: uatKeyId,
       JWT_ADDITIONAL_PAYLOAD: jwtAdditionalPayload,
       DATASOURCE_CREDENTIALS: datasourceCredentials,
-      DEFAULT_LOG_LEVEL: defaultLogLevel,
-      DISABLE_LOG_MASKING: disableLogMasking,
-      INCLUDE_TOOLS: includeTools,
-      EXCLUDE_TOOLS: excludeTools,
-      MAX_REQUEST_TIMEOUT_MS: maxRequestTimeoutMs,
-      MAX_RESULT_LIMIT: maxResultLimit,
-      MAX_RESULT_LIMITS: maxResultLimits,
-      DISABLE_QUERY_DATASOURCE_VALIDATION_REQUESTS: disableQueryDatasourceValidationRequests,
-      DISABLE_METADATA_API_REQUESTS: disableMetadataApiRequests,
       DISABLE_SESSION_MANAGEMENT: disableSessionManagement,
-      ENABLE_SERVER_LOGGING: enableServerLogging,
-      SERVER_LOG_DIRECTORY: serverLogDirectory,
       MCP_ASSET_STRATEGY: assetStrategy,
       MCP_ASSET_SECRET_KEY: assetSecretKey,
       MCP_ASSET_CORS_ORIGINS: assetCorsOrigins,
       MCP_ASSET_STORAGE_PATH: assetStoragePath,
       MCP_ASSET_EXPIRATION_HOURS: assetExpirationHours,
       MCP_SERVER_URL: mcpServerUrl,
-      INCLUDE_PROJECT_IDS: includeProjectIds,
-      INCLUDE_DATASOURCE_IDS: includeDatasourceIds,
-      INCLUDE_WORKBOOK_IDS: includeWorkbookIds,
       TABLEAU_SERVER_VERSION_CHECK_INTERVAL_IN_HOURS: tableauServerVersionCheckIntervalInHours,
+      PASSTHROUGH_AUTH_USER_SESSION_CHECK_INTERVAL_IN_MINUTES:
+        passthroughAuthUserSessionCheckIntervalInMinutes,
+      MCP_SITE_SETTINGS_CHECK_INTERVAL_IN_MINUTES: mcpSiteSettingsCheckIntervalInMinutes,
+      ENABLE_MCP_SITE_SETTINGS: enableMcpSiteSettings,
+      ALLOW_SITES_TO_CONFIGURE_REQUEST_OVERRIDES: allowSitesToConfigureRequestOverrides,
+      ENABLE_PASSTHROUGH_AUTH: enablePassthroughAuth,
       DANGEROUSLY_DISABLE_OAUTH: disableOauth,
+      OAUTH_EMBEDDED_AUTHZ_SERVER: oauthEmbeddedAuthzServer,
       OAUTH_ISSUER: oauthIssuer,
       OAUTH_LOCK_SITE: oauthLockSite,
       OAUTH_JWE_PRIVATE_KEY: oauthJwePrivateKey,
       OAUTH_JWE_PRIVATE_KEY_PATH: oauthJwePrivateKeyPath,
       OAUTH_JWE_PRIVATE_KEY_PASSPHRASE: oauthJwePrivateKeyPassphrase,
+      OAUTH_RESOURCE_URI: oauthResourceUri,
+      OAUTH_GLOBAL_RESOURCE_URIS: oauthGlobalResourceUris,
       OAUTH_REDIRECT_URI: redirectUri,
       OAUTH_CLIENT_ID_SECRET_PAIRS: oauthClientIdSecretPairs,
       OAUTH_CIMD_DNS_SERVERS: dnsServers,
+      ADVERTISE_API_SCOPES: advertiseApiScopes,
       OAUTH_AUTHORIZATION_CODE_TIMEOUT_MS: authzCodeTimeoutMs,
       OAUTH_ACCESS_TOKEN_TIMEOUT_MS: accessTokenTimeoutMs,
       OAUTH_REFRESH_TOKEN_TIMEOUT_MS: refreshTokenTimeoutMs,
@@ -164,8 +157,20 @@ export class Config {
       GOOGLE_CLIENT_ID: googleClientId,
       GOOGLE_CLIENT_SECRET: googleClientSecret,
       ALLOWED_GOOGLE_EMAILS: allowedGoogleEmails,
+      OAUTH_DISABLE_SCOPES: oauthDisableScopes,
       TELEMETRY_PROVIDER: telemetryProvider,
       TELEMETRY_PROVIDER_CONFIG: telemetryProviderConfig,
+      FEATURE_GATE_PROVIDER: featureGateProvider,
+      FEATURE_GATE_PROVIDER_CONFIG: featureGateProviderConfig,
+      LATENCY_METRIC_NAME: latencyMetricName,
+      PRODUCT_TELEMETRY_ENDPOINT: productTelemetryEndpoint,
+      PRODUCT_TELEMETRY_ENABLED: productTelemetryEnabled,
+      IS_HYPERFORCE: isHyperforce,
+      BREAK_GLASS_DISABLE_GLOBALLY: breakGlassDisableGlobally,
+      ADMIN_TOOLS_ENABLED: adminToolsEnabled,
+      FLOW_TOOLS_ENABLED: flowToolsEnabled,
+      INSIGHTS_TOOLS_ENABLED: insightsToolsEnabled,
+      CSP_ALLOWED_DOMAINS: cspAllowedDomains,
     } = cleansedVars;
 
     let jwtUsername = '';
@@ -180,39 +185,8 @@ export class Config {
       maxValue: 65535,
     });
     this.corsOriginConfig = getCorsOriginConfig(corsOriginConfig?.trim() ?? '');
-    this.trustProxyConfig = getTrustProxyConfig(trustProxyConfig?.trim() ?? '');
     this.datasourceCredentials = datasourceCredentials ?? '';
-    this.defaultLogLevel = defaultLogLevel ?? 'debug';
-    this.disableLogMasking = disableLogMasking === 'true';
-    this.disableQueryDatasourceValidationRequests =
-      disableQueryDatasourceValidationRequests === 'true';
-    this.disableMetadataApiRequests = disableMetadataApiRequests === 'true';
     this.disableSessionManagement = disableSessionManagement === 'true';
-    this.enableServerLogging = enableServerLogging === 'true';
-    this.serverLogDirectory = serverLogDirectory || join(__dirname, 'logs');
-    this.boundedContext = {
-      projectIds: createSetFromCommaSeparatedString(includeProjectIds),
-      datasourceIds: createSetFromCommaSeparatedString(includeDatasourceIds),
-      workbookIds: createSetFromCommaSeparatedString(includeWorkbookIds),
-    };
-
-    if (this.boundedContext.projectIds?.size === 0) {
-      throw new Error(
-        'When set, the environment variable INCLUDE_PROJECT_IDS must have at least one value',
-      );
-    }
-
-    if (this.boundedContext.datasourceIds?.size === 0) {
-      throw new Error(
-        'When set, the environment variable INCLUDE_DATASOURCE_IDS must have at least one value',
-      );
-    }
-
-    if (this.boundedContext.workbookIds?.size === 0) {
-      throw new Error(
-        'When set, the environment variable INCLUDE_WORKBOOK_IDS must have at least one value',
-      );
-    }
 
     this.tableauServerVersionCheckIntervalInHours = parseNumber(
       tableauServerVersionCheckIntervalInHours,
@@ -223,12 +197,51 @@ export class Config {
       },
     );
 
+    this.passthroughAuthUserSessionCheckIntervalInMinutes = parseNumber(
+      passthroughAuthUserSessionCheckIntervalInMinutes,
+      {
+        defaultValue: 10,
+        minValue: 0,
+        maxValue: 60 * 24, // 24 hours
+      },
+    );
+
+    this.mcpSiteSettingsCheckIntervalInMinutes = parseNumber(
+      mcpSiteSettingsCheckIntervalInMinutes,
+      {
+        defaultValue: 10,
+        minValue: 1,
+        maxValue: 60 * 24, // 24 hours
+      },
+    );
+
+    this.enableMcpSiteSettings = enableMcpSiteSettings !== 'false';
+    this.allowSitesToConfigureRequestOverrides = allowSitesToConfigureRequestOverrides === 'true';
+    this.enablePassthroughAuth = enablePassthroughAuth === 'true';
     const disableOauthOverride = disableOauth === 'true';
     const parsedOauthProvider = oauthProvider === 'google' ? 'google' : 'tableau';
+    const disableScopes = oauthDisableScopes === 'true';
+    const enforceScopes = !disableScopes;
+    const embeddedAuthzServer = oauthEmbeddedAuthzServer !== 'false';
+
+    if (this.allowSitesToConfigureRequestOverrides && !this.enableMcpSiteSettings) {
+      throw new Error(
+        'ALLOW_SITES_TO_CONFIGURE_REQUEST_OVERRIDES is "true", but MCP site settings are not enabled.',
+      );
+    }
+
     this.oauth = {
       enabled: disableOauthOverride ? false : !!oauthIssuer,
       provider: parsedOauthProvider,
+      embeddedAuthzServer,
       issuer: oauthIssuer ?? '',
+      resourceUri: oauthResourceUri ?? `http://127.0.0.1:${this.httpPort}`,
+      globalResourceUris: oauthGlobalResourceUris
+        ? oauthGlobalResourceUris
+            .split(',')
+            .map((uri) => uri.trim())
+            .filter(Boolean)
+        : [],
       redirectUri: redirectUri || (oauthIssuer ? `${oauthIssuer}/Callback` : ''),
       lockSite: oauthLockSite !== 'false', // Site locking is enabled by default
       jwePrivateKey: oauthJwePrivateKey ?? '',
@@ -238,19 +251,19 @@ export class Config {
         ? dnsServers.split(',').map((ip) => ip.trim())
         : ['1.1.1.1', '1.0.0.1' /* Cloudflare public DNS */],
       authzCodeTimeoutMs: parseNumber(authzCodeTimeoutMs, {
-        defaultValue: TEN_MINUTES_IN_MS,
+        defaultValue: milliseconds.fromMinutes(10),
         minValue: 0,
-        maxValue: ONE_HOUR_IN_MS,
+        maxValue: milliseconds.fromHours(1),
       }),
       accessTokenTimeoutMs: parseNumber(accessTokenTimeoutMs, {
-        defaultValue: ONE_HOUR_IN_MS,
+        defaultValue: milliseconds.fromHours(1),
         minValue: 0,
-        maxValue: THIRTY_DAYS_IN_MS,
+        maxValue: milliseconds.fromDays(30),
       }),
       refreshTokenTimeoutMs: parseNumber(refreshTokenTimeoutMs, {
-        defaultValue: THIRTY_DAYS_IN_MS,
+        defaultValue: milliseconds.fromDays(30),
         minValue: 0,
-        maxValue: ONE_YEAR_IN_MS,
+        maxValue: milliseconds.fromYears(1),
       }),
       clientIdSecretPairs: oauthClientIdSecretPairs
         ? oauthClientIdSecretPairs.split(',').reduce<Record<string, string>>((acc, curr) => {
@@ -267,7 +280,18 @@ export class Config {
       allowedGoogleEmails: allowedGoogleEmails
         ? allowedGoogleEmails.split(',').map((email) => email.trim().toLowerCase())
         : [],
+      enforceScopes,
+      advertiseApiScopes: advertiseApiScopes === 'true',
     };
+
+    if (
+      this.oauth.clientIdSecretPairs &&
+      Object.keys(this.oauth.clientIdSecretPairs).length === 0
+    ) {
+      throw new Error(
+        `OAUTH_CLIENT_ID_SECRET_PAIRS is in an invalid format: ${oauthClientIdSecretPairs}. Should be in the format: clientId:secret`,
+      );
+    }
 
     const parsedProvider = isTelemetryProvider(telemetryProvider) ? telemetryProvider : 'noop';
     if (parsedProvider === 'custom') {
@@ -282,9 +306,44 @@ export class Config {
       };
     } else {
       this.telemetry = {
-        provider: parsedProvider,
+        provider: 'noop',
       };
     }
+
+    this.latencyMetricName = latencyMetricName || 'http_server_1agg1_request_duration';
+    this.productTelemetryEndpoint =
+      productTelemetryEndpoint || 'https://prod.telemetry.tableausoftware.com';
+    this.productTelemetryEnabled = productTelemetryEnabled !== 'false';
+    this.isHyperforce = isHyperforce === 'true';
+
+    // Feature gate provider configuration (similar to telemetry provider)
+    if (isFeatureGateProvider(featureGateProvider) && featureGateProvider === 'custom') {
+      if (!featureGateProviderConfig) {
+        throw new Error(
+          'FEATURE_GATE_PROVIDER_CONFIG is required when FEATURE_GATE_PROVIDER is "custom"',
+        );
+      }
+      this.featureGate = {
+        provider: 'custom',
+        providerConfig: featureGateProviderConfigSchema.parse(
+          JSON.parse(featureGateProviderConfig),
+        ),
+      };
+    } else {
+      this.featureGate = {
+        provider: 'server',
+      };
+    }
+
+    this.breakGlassDisableGlobally = breakGlassDisableGlobally === 'true';
+    this.adminToolsEnabled = adminToolsEnabled === 'true';
+    // Flow tools are gated off by default while flow rollouts are staged into
+    // production; set FLOW_TOOLS_ENABLED=true to register them.
+    this.flowToolsEnabled = flowToolsEnabled === 'true';
+    // Insight-cards tools (generate-insight-cards, resolve-datasource-luid) are
+    // gated off by default while the insights rollout is staged (keeps hosts
+    // like Slackbot stable); set INSIGHTS_TOOLS_ENABLED=true to register them.
+    this.insightsToolsEnabled = insightsToolsEnabled === 'true';
 
     this.auth = isAuthType(auth) ? auth : this.oauth.enabled ? 'oauth' : 'pat';
     this.transport = isTransport(transport) ? transport : this.oauth.enabled ? 'http' : 'stdio';
@@ -309,28 +368,30 @@ export class Config {
     }
 
     if (this.oauth.enabled) {
-      invariant(this.oauth.redirectUri, 'The environment variable OAUTH_REDIRECT_URI is not set');
+      if (this.oauth.embeddedAuthzServer) {
+        invariant(this.oauth.redirectUri, 'The environment variable OAUTH_REDIRECT_URI is not set');
 
-      if (!this.oauth.jwePrivateKey && !this.oauth.jwePrivateKeyPath) {
-        throw new Error(
-          'One of the environment variables: OAUTH_JWE_PRIVATE_KEY_PATH or OAUTH_JWE_PRIVATE_KEY must be set',
-        );
-      }
+        if (!this.oauth.jwePrivateKey && !this.oauth.jwePrivateKeyPath) {
+          throw new Error(
+            'One of the environment variables: OAUTH_JWE_PRIVATE_KEY_PATH or OAUTH_JWE_PRIVATE_KEY must be set',
+          );
+        }
 
-      if (this.oauth.jwePrivateKey && this.oauth.jwePrivateKeyPath) {
-        throw new Error(
-          'Only one of the environment variables: OAUTH_JWE_PRIVATE_KEY or OAUTH_JWE_PRIVATE_KEY_PATH must be set',
-        );
-      }
+        if (this.oauth.jwePrivateKey && this.oauth.jwePrivateKeyPath) {
+          throw new Error(
+            'Only one of the environment variables: OAUTH_JWE_PRIVATE_KEY or OAUTH_JWE_PRIVATE_KEY_PATH must be set',
+          );
+        }
 
-      if (
-        this.oauth.jwePrivateKeyPath &&
-        process.env.TABLEAU_MCP_TEST !== 'true' &&
-        !existsSync(this.oauth.jwePrivateKeyPath)
-      ) {
-        throw new Error(
-          `OAuth JWE private key path does not exist: ${this.oauth.jwePrivateKeyPath}`,
-        );
+        if (
+          this.oauth.jwePrivateKeyPath &&
+          process.env.TABLEAU_MCP_TEST !== 'true' &&
+          !existsSync(this.oauth.jwePrivateKeyPath)
+        ) {
+          throw new Error(
+            `OAuth JWE private key path does not exist: ${this.oauth.jwePrivateKeyPath}`,
+          );
+        }
       }
 
       if (this.transport === 'stdio') {
@@ -350,36 +411,6 @@ export class Config {
       }
     }
 
-    this.maxRequestTimeoutMs = parseNumber(maxRequestTimeoutMs, {
-      defaultValue: TEN_MINUTES_IN_MS,
-      minValue: 5000,
-      maxValue: ONE_HOUR_IN_MS,
-    });
-
-    const maxResultLimitNumber = maxResultLimit ? parseInt(maxResultLimit) : NaN;
-    this.maxResultLimit =
-      isNaN(maxResultLimitNumber) || maxResultLimitNumber <= 0 ? null : maxResultLimitNumber;
-
-    this.maxResultLimits = maxResultLimits ? getMaxResultLimits(maxResultLimits) : null;
-
-    this.includeTools = includeTools
-      ? includeTools.split(',').flatMap((s) => {
-          const v = s.trim();
-          return isToolName(v) ? v : isToolGroupName(v) ? toolGroups[v] : [];
-        })
-      : [];
-
-    this.excludeTools = excludeTools
-      ? excludeTools.split(',').flatMap((s) => {
-          const v = s.trim();
-          return isToolName(v) ? v : isToolGroupName(v) ? toolGroups[v] : [];
-        })
-      : [];
-
-    if (this.includeTools.length > 0 && this.excludeTools.length > 0) {
-      throw new Error('Cannot include and exclude tools simultaneously');
-    }
-
     // MCP_SERVER_URL can be used to explicitly set the server URL (takes precedence over X-Forwarded-Host)
     // The actual URL used will be determined at request time using X-Forwarded-Host headers when available
     // This fallback is only used when no override is set and no X-Forwarded-Host header is present
@@ -394,7 +425,8 @@ export class Config {
 
     this.assetStoragePath = assetStoragePath?.trim() || join(__dirname, '..', 'assets');
     const expirationHours = assetExpirationHours ? parseInt(assetExpirationHours) : NaN;
-    this.assetExpirationHours = isNaN(expirationHours) || expirationHours <= 0 ? 24 : expirationHours;
+    this.assetExpirationHours =
+      isNaN(expirationHours) || expirationHours <= 0 ? 24 : expirationHours;
 
     // Validate required asset serving configuration based on strategy
     // Only 'disabled' and 'inline' strategies work without secret key and CORS origins
@@ -405,20 +437,22 @@ export class Config {
       invariant(
         assetSecretKey?.trim(),
         `The environment variable MCP_ASSET_SECRET_KEY is required when MCP_ASSET_STRATEGY="${this.assetStrategy}". ` +
-        `Only "disabled" and "inline" strategies work without a secret key.`
+          'Only "disabled" and "inline" strategies work without a secret key.',
       );
       invariant(
         assetCorsOrigins?.trim(),
         `The environment variable MCP_ASSET_CORS_ORIGINS is required when MCP_ASSET_STRATEGY="${this.assetStrategy}". ` +
-        `Only "disabled" and "inline" strategies work without CORS configuration.`
+          'Only "disabled" and "inline" strategies work without CORS configuration.',
       );
 
       // Parse CORS origins and set secret key
-      this.assetCorsOrigins = assetCorsOrigins!.split(',').map(origin => origin.trim());
+      this.assetCorsOrigins = assetCorsOrigins!.split(',').map((origin) => origin.trim());
       this.assetSecretKey = assetSecretKey!.trim();
     } else {
       // For 'disabled' and 'inline' strategies, secret key and CORS are optional
-      this.assetCorsOrigins = assetCorsOrigins ? assetCorsOrigins.split(',').map(origin => origin.trim()) : [];
+      this.assetCorsOrigins = assetCorsOrigins
+        ? assetCorsOrigins.split(',').map((origin) => origin.trim())
+        : [];
       this.assetSecretKey = assetSecretKey?.trim() || '';
     }
 
@@ -466,6 +500,19 @@ export class Config {
     }
 
     this.server = server ?? '';
+
+    // Configure CSP domains with serverOrigin in defaults
+    const serverOrigin = this.server ? new URL(this.server).origin : '';
+    const defaultDomains = [
+      'https://*.online.tableau.com',
+      'https://*.tableau.com',
+      ...(serverOrigin ? [serverOrigin] : []),
+    ];
+    const customDomains = cspAllowedDomains
+      ? cspAllowedDomains.split(',').map((d) => d.trim())
+      : [];
+    this.cspAllowedDomains = [...defaultDomains, ...customDomains];
+
     this.patName = patName ?? '';
     this.patValue = patValue ?? '';
     this.jwtUsername = jwtUsername ?? '';
@@ -490,7 +537,7 @@ function validateServer(server: string): void {
   }
 
   try {
-    const _ = new URL(server);
+    new URL(server);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     throw new Error(
@@ -532,106 +579,4 @@ function getCorsOriginConfig(corsOriginConfig: string): CorsOptions['origin'] {
   }
 }
 
-function getTrustProxyConfig(trustProxyConfig: string): boolean | number | string | null {
-  if (!trustProxyConfig) {
-    return null;
-  }
-
-  if (trustProxyConfig.match(/^true|false$/i)) {
-    return trustProxyConfig.toLowerCase() === 'true';
-  }
-
-  if (trustProxyConfig.match(/^\d+$/)) {
-    return parseInt(trustProxyConfig, 10);
-  }
-
-  return trustProxyConfig;
-}
-
-// Creates a set from a comma-separated string of values.
-// Returns null if the value is undefined.
-function createSetFromCommaSeparatedString(value: string | undefined): Set<string> | null {
-  if (value === undefined) {
-    return null;
-  }
-
-  return new Set(
-    value
-      .trim()
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean),
-  );
-}
-
-// When the user does not provide a site name in the Claude MCP Bundle configuration,
-// Claude doesn't replace its value and sets the site name to "${user_config.site_name}".
-function removeClaudeMcpBundleUserConfigTemplates(
-  envVars: Record<string, string | undefined>,
-): Record<string, string | undefined> {
-  return Object.entries(envVars).reduce<Record<string, string | undefined>>((acc, [key, value]) => {
-    if (value?.startsWith('${user_config.')) {
-      acc[key] = '';
-    } else {
-      acc[key] = value;
-    }
-    return acc;
-  }, {});
-}
-
-function getMaxResultLimits(maxResultLimits: string): Map<ToolName, number | null> {
-  const map = new Map<ToolName, number | null>();
-  if (!maxResultLimits) {
-    return map;
-  }
-
-  maxResultLimits.split(',').forEach((curr) => {
-    const [toolName, maxResultLimit] = curr.split(':');
-    const maxResultLimitNumber = maxResultLimit ? parseInt(maxResultLimit) : NaN;
-    const actualLimit =
-      isNaN(maxResultLimitNumber) || maxResultLimitNumber <= 0 ? null : maxResultLimitNumber;
-    if (isToolName(toolName)) {
-      map.set(toolName, actualLimit);
-    } else if (isToolGroupName(toolName)) {
-      toolGroups[toolName].forEach((toolName) => {
-        if (!map.has(toolName)) {
-          // Tool names take precedence over group names
-          map.set(toolName, actualLimit);
-        }
-      });
-    }
-  });
-
-  return map;
-}
-
-function parseNumber(
-  value: string | undefined,
-  {
-    defaultValue,
-    minValue,
-    maxValue,
-  }: { defaultValue: number; minValue?: number; maxValue?: number } = {
-    defaultValue: 0,
-    minValue: Number.NEGATIVE_INFINITY,
-    maxValue: Number.POSITIVE_INFINITY,
-  },
-): number {
-  if (!value) {
-    return defaultValue;
-  }
-
-  const number = parseFloat(value);
-  return isNaN(number) ||
-    (minValue !== undefined && number < minValue) ||
-    (maxValue !== undefined && number > maxValue)
-    ? defaultValue
-    : number;
-}
-
 export const getConfig = (): Config => new Config();
-
-export const exportedForTesting = {
-  Config,
-  parseNumber,
-};

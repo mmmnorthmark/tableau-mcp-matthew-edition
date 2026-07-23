@@ -12,10 +12,12 @@ import { PulseDiscoverBrief, PulseInsightResult } from '../sdks/tableau/types/pu
  * @param bundle - The insight bundle response
  * @returns The current metric value object with formatted and raw values, or undefined if not found
  */
-export function getCurrentMetricValue(bundle: any): {
-  formatted: string;
-  raw?: number;
-} | undefined {
+export function getCurrentMetricValue(bundle: any):
+  | {
+      formatted: string;
+      raw?: number;
+    }
+  | undefined {
   const insightGroups = bundle.bundle_response?.result?.insight_groups;
   if (!insightGroups) return undefined;
 
@@ -172,10 +174,12 @@ export function getPeriodOverPeriodComparison(bundle: any): any | undefined {
  * @param bundle - The insight bundle response
  * @returns Object containing absolute and relative differences, or undefined if not found
  */
-export function getMetricDifference(bundle: any): {
-  absolute: { formatted: string; raw?: number };
-  relative: { formatted: string };
-} | undefined {
+export function getMetricDifference(bundle: any):
+  | {
+      absolute: { formatted: string; raw?: number };
+      relative: { formatted: string };
+    }
+  | undefined {
   const popcInsight = getPeriodOverPeriodComparison(bundle);
   if (!popcInsight) return undefined;
 

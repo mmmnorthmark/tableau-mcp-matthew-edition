@@ -1,4 +1,4 @@
-import { fieldSchema, filterSchema } from './vizqlDataServiceApi.js';
+import { datasourceModelResponseSchema, fieldSchema, filterSchema } from './vizqlDataServiceApi.js';
 
 describe('Field schema', () => {
   it('accepts a minimal valid Field', () => {
@@ -32,6 +32,74 @@ describe('Field schema', () => {
   });
 });
 
+describe('Datasource model response schema', () => {
+  it('accepts a single-table model with no relationships', () => {
+    const data = {
+      logicalTables: [{ logicalTableId: 'pp-2025.csv_35B9C215', caption: 'pp-2025.csv' }],
+      logicalTableRelationships: [],
+    };
+    expect(() => datasourceModelResponseSchema.parse(data)).not.toThrow();
+  });
+
+  it('accepts a multi-table model with relationships that include an expression', () => {
+    const data = {
+      logicalTables: [
+        { logicalTableId: 'Orders_ECFCA1FB', caption: 'Orders' },
+        { logicalTableId: 'People_D7302373', caption: 'People' },
+      ],
+      logicalTableRelationships: [
+        {
+          fromLogicalTable: { logicalTableId: 'Orders_ECFCA1FB' },
+          toLogicalTable: { logicalTableId: 'People_D7302373' },
+          expression: {
+            op: 'and',
+            relationships: [{ operator: '=', fromField: 'Region', toField: 'Region' }],
+          },
+        },
+      ],
+    };
+    expect(() => datasourceModelResponseSchema.parse(data)).not.toThrow();
+  });
+
+  it('accepts a multi-table model with relationships that omit the expression', () => {
+    // Reproduces tableau/tableau-mcp#364: Tableau returns relationships without
+    // an `expression` key when the relationship is implicit.
+    const data = {
+      logicalTables: [
+        { logicalTableId: 'Orders_ECFCA1FB' },
+        { logicalTableId: 'People_D7302373' },
+        { logicalTableId: 'Returns_2AA0FE4D' },
+      ],
+      logicalTableRelationships: [
+        {
+          fromLogicalTable: { logicalTableId: 'Orders_ECFCA1FB' },
+          toLogicalTable: { logicalTableId: 'People_D7302373' },
+        },
+        {
+          fromLogicalTable: { logicalTableId: 'Orders_ECFCA1FB' },
+          toLogicalTable: { logicalTableId: 'Returns_2AA0FE4D' },
+        },
+      ],
+    };
+    expect(() => datasourceModelResponseSchema.parse(data)).not.toThrow();
+  });
+
+  it('leaves a missing expression absent rather than synthesizing one', () => {
+    const data = {
+      logicalTables: [{ logicalTableId: 'Orders_ECFCA1FB' }, { logicalTableId: 'People_D7302373' }],
+      logicalTableRelationships: [
+        {
+          fromLogicalTable: { logicalTableId: 'Orders_ECFCA1FB' },
+          toLogicalTable: { logicalTableId: 'People_D7302373' },
+        },
+      ],
+    };
+    const parsed = datasourceModelResponseSchema.parse(data);
+    expect(parsed.logicalTableRelationships[0]).not.toHaveProperty('expression');
+    expect(parsed.logicalTableRelationships[0].expression).toBeUndefined();
+  });
+});
+
 describe('SET Filter schema', () => {
   it('accepts a valid SET filter', () => {
     const data = {
@@ -52,22 +120,22 @@ describe('SET Filter schema', () => {
     expect(() => filterSchema.parse(data)).not.toThrow();
   });
 
-  it('rejects a SET filter with a function', () => {
+  it('accepts a SET filter with a function', () => {
     const data = {
       filterType: 'SET',
-      field: { fieldCaption: 'Category', function: 'SUM' },
-      values: ['Technology', 'Furniture'],
+      field: { fieldCaption: 'Order Date', function: 'MONTH' },
+      values: ['January', 'February'],
     };
-    expect(() => filterSchema.parse(data)).toThrow();
+    expect(() => filterSchema.parse(data)).not.toThrow();
   });
 
-  it('rejects a SET filter with a calculation', () => {
+  it('accepts a SET filter with a calculation', () => {
     const data = {
       filterType: 'SET',
-      field: { fieldCaption: 'Category', calculation: 'SUM([Sales])' },
-      values: ['Technology', 'Furniture'],
+      field: { calculation: 'QUARTER([Order Date])' },
+      values: ['Q3', 'Q4'],
     };
-    expect(() => filterSchema.parse(data)).toThrow();
+    expect(() => filterSchema.parse(data)).not.toThrow();
   });
 
   it('rejects a SET filter with no values', () => {

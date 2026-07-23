@@ -22,7 +22,7 @@ export function googleAuthorize(
 ): void {
   const config = getConfig();
 
-  app.get('/oauth/authorize', async (req, res) => {
+  app.get('/oauth2/authorize', async (req, res) => {
     const result = mcpAuthorizeSchema.safeParse(req.query);
 
     if (!result.success) {

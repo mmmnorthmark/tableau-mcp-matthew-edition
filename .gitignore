@@ -2,7 +2,9 @@
 .env
 *.env
 .env.*
+.vscode/
 build/
+cache/
 node_modules/
 junit/
 coverage/
@@ -33,3 +35,23 @@ tableau-mcp.mcpb
 assets/*
 !assets/.gitkeep
 !assets/widget/
+
+# MCP Apps
+src/web/apps/dist/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/blob-reports/
+/playwright/.cache/
+/playwright/.auth/
+
+.work/tickets/*.md
+.work/specs/GUS-*.md
+.work/specs/gus-*.md
+.work/reports/*.md
+!.work/specs/TEMPLATE.md
+!.work/**/.gitkeep
+
+.worktrees/

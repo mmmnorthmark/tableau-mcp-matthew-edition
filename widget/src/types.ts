@@ -19,7 +19,9 @@ export interface OpenAIGlobals {
   callTool?: (name: string, args: Record<string, unknown>) => Promise<{ result: string }>;
   sendFollowUpMessage?: (args: { prompt: string }) => Promise<void>;
   openExternal?: (payload: { href: string }) => void;
-  requestDisplayMode?: (args: { mode: 'pip' | 'inline' | 'fullscreen' }) => Promise<{ mode: 'pip' | 'inline' | 'fullscreen' }>;
+  requestDisplayMode?: (args: {
+    mode: 'pip' | 'inline' | 'fullscreen';
+  }) => Promise<{ mode: 'pip' | 'inline' | 'fullscreen' }>;
 }
 
 // Pulse metric data structure (matches what the MCP tool returns)

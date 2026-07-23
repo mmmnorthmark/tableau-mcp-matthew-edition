@@ -1,33 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import {
-  InitializeRequest,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ReadResourceRequestSchema,
-  SetLevelRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { InitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
-import pkg from '../package.json';
-import { getConfig } from './config.js';
-import { setLogLevel } from './logging/log.js';
 import { TableauAuthInfo } from './server/oauth/schemas.js';
-import {
-  getPulseWidgetResources,
-  getPulseWidgetResourceTemplates,
-  readPulseWidgetResource,
-} from './tools/pulse/renderPulseMetric/resources.js';
-import { Tool } from './tools/tool.js';
-import { toolNames } from './tools/toolName.js';
-import { toolFactories } from './tools/tools.js';
-import { Provider } from './utils/provider.js';
-
-export const serverName = 'tableau-mcp';
-export const serverVersion = pkg.version;
-export const userAgent = `${serverName}/${serverVersion}`;
 
 export type ClientInfo = InitializeRequest['params']['clientInfo'];
 
-export class Server extends McpServer {
+export abstract class Server {
+  readonly mcpServer: McpServer;
   readonly name: string;
   readonly version: string;
 
@@ -46,27 +25,41 @@ export class Server extends McpServer {
   private readonly _mcpServerUrl: string | undefined;
 
   get clientInfo(): ClientInfo | undefined {
-    return this._clientInfo ?? this.server.getClientVersion();
+    return this._clientInfo ?? this.mcpServer.server.getClientVersion();
   }
 
   get mcpServerUrl(): string | undefined {
     return this._mcpServerUrl;
   }
 
-  constructor({ clientInfo, mcpServerUrl }: { clientInfo?: ClientInfo; mcpServerUrl?: string } = {}) {
-    super(
-      {
-        name: serverName,
-        version: serverVersion,
-      },
-      {
-        capabilities: {
-          logging: {},
-          tools: {},
-          resources: {},
+  constructor({
+    mcpServer,
+    clientInfo,
+    serverName,
+    serverVersion,
+    mcpServerUrl,
+  }: {
+    mcpServer?: McpServer;
+    clientInfo?: ClientInfo;
+    serverName: string;
+    serverVersion: string;
+    mcpServerUrl?: string;
+  }) {
+    this.mcpServer =
+      mcpServer ??
+      new McpServer(
+        {
+          name: serverName,
+          version: serverVersion,
         },
-      },
-    );
+        {
+          capabilities: {
+            logging: {},
+            tools: {},
+            prompts: {},
+          },
+        },
+      );
 
     this.name = serverName;
     this.version = serverVersion;
@@ -74,86 +67,16 @@ export class Server extends McpServer {
     this._mcpServerUrl = mcpServerUrl;
   }
 
-  registerTools = async (authInfo?: TableauAuthInfo): Promise<void> => {
-    for (const tool of this._getToolsToRegister(authInfo)) {
-      const { name, description, paramsSchema, annotations, title, _meta, callback } = tool;
-
-      // Use registerTool for tools with _meta (OpenAI Apps SDK widgets)
-      if (_meta) {
-        this.registerTool(name, {
-          title,
-          description: await Provider.from(description),
-          inputSchema: await Provider.from(paramsSchema),
-          annotations: await Provider.from(annotations),
-          _meta,
-        }, await Provider.from(callback));
-      } else {
-        // Use standard registerTool for regular tools
-        this.registerTool(
-          name,
-          {
-            description: await Provider.from(description),
-            inputSchema: await Provider.from(paramsSchema),
-            annotations: await Provider.from(annotations),
-          },
-          await Provider.from(callback),
-        );
+  get userAgent(): string {
+    const userAgentParts = [`${this.name}/${this.version}`];
+    if (this.clientInfo) {
+      const { name, version } = this.clientInfo;
+      if (name) {
+        userAgentParts.push(version ? `(${name} ${version})` : `(${name})`);
       }
     }
-  };
+    return userAgentParts.join(' ');
+  }
 
-  registerRequestHandlers = (): void => {
-    this.server.setRequestHandler(SetLevelRequestSchema, async (request) => {
-      setLogLevel(this, request.params.level);
-      return {};
-    });
-
-    // Resource handlers for OpenAI Apps SDK widgets
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-      resources: getPulseWidgetResources(),
-    }));
-
-    this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-      const resource = readPulseWidgetResource(request.params.uri);
-      return {
-        contents: [resource],
-      };
-    });
-
-    this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
-      resourceTemplates: getPulseWidgetResourceTemplates(),
-    }));
-  };
-
-  private _getToolsToRegister = (authInfo?: TableauAuthInfo): Array<Tool<any>> => {
-    const { includeTools, excludeTools } = getConfig();
-
-    const tools = toolFactories.map((toolFactory) => toolFactory(this, authInfo));
-    const toolsToRegister = tools.filter((tool) => {
-      if (includeTools.length > 0) {
-        return includeTools.includes(tool.name);
-      }
-
-      if (excludeTools.length > 0) {
-        return !excludeTools.includes(tool.name);
-      }
-
-      return true;
-    });
-
-    if (toolsToRegister.length === 0) {
-      throw new Error(`
-          No tools to register.
-          Tools available = [${toolNames.join(', ')}].
-          EXCLUDE_TOOLS = [${excludeTools.join(', ')}].
-          INCLUDE_TOOLS = [${includeTools.join(', ')}]
-        `);
-    }
-
-    return toolsToRegister;
-  };
+  abstract registerTools: (tableauAuthInfo?: TableauAuthInfo) => Promise<void>;
 }
-
-export const exportedForTesting = {
-  Server,
-};

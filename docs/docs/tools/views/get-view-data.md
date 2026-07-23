@@ -10,7 +10,7 @@ Retrieves data in comma separated value (CSV) format for the specified view in a
 
 - [Query View Data](https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_workbooks_and_views.htm#query_view_data)
 - [Get View](https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_workbooks_and_views.htm#get_view)
-  (if workbook or project [tool scoping](../../configuration/mcp-config/tool-scoping.md) is enabled)
+  (if applicable [tool scoping](../../configuration/mcp-config/tool-scoping.md) is enabled)
 
 ## Required arguments
 
@@ -20,6 +20,15 @@ The ID of the view, potentially retrieved by the [List Views](list-views.md) or
 [Get Workbook](../workbooks/get-workbook.md) tool.
 
 Example: `9460abfe-a6b2-49d1-b998-39e1ebcc55ce`
+
+## Optional arguments
+
+### `viewFilters`
+
+Map of view filter field names to values. `vf_` prefix for field names is optional and will be added
+automatically when building the view filter query.
+
+Example: `{ "year": "2017" }`
 
 ## Example result
 

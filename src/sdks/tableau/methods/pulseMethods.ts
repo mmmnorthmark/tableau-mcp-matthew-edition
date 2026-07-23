@@ -1,15 +1,24 @@
 import { Zodios } from '@zodios/core';
-import { Err, Ok, Result } from 'ts-results-es';
+import { Ok, Result } from 'ts-results-es';
 import z from 'zod';
 
+import {
+  McpToolError,
+  PulseDisabledError,
+  PulseInsightsApiError,
+  PulseInsightsDisabledError,
+  PulseNotAvailableError,
+} from '../../../errors/mcpToolError.js';
+import { formatPulseInsightsApiError } from '../../../errors/pulseInsightsApiError.js';
 import { AxiosRequestConfig, isAxiosError } from '../../../utils/axios.js';
 import { pulseApis } from '../apis/pulseApi.js';
-import { Credentials } from '../types/credentials.js';
+import { RestApiCredentials } from '../restApi.js';
 import { PulsePagination } from '../types/pagination.js';
 import {
+  ActionTypeEnumType,
   pulseBundleRequestSchema,
-  pulseBundleResponseSchema,
   PulseBundleResponse,
+  pulseBundleResponseSchema,
   PulseDiscoverBrief,
   PulseFollowedMetricsGroupsResponse,
   pulseInsightBriefRequestSchema,
@@ -20,6 +29,7 @@ import {
   PulseMetricDefinitionView,
   PulseMetricGroup,
   PulseMetricSubscription,
+  RoleEnumType,
 } from '../types/pulse.js';
 import AuthenticatedMethods from './authenticatedMethods.js';
 
@@ -31,7 +41,7 @@ import AuthenticatedMethods from './authenticatedMethods.js';
  * @link https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_pulse.htm
  */
 export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis> {
-  constructor(baseUrl: string, creds: Credentials, axiosConfig: AxiosRequestConfig) {
+  constructor(baseUrl: string, creds: RestApiCredentials, axiosConfig: AxiosRequestConfig) {
     super(new Zodios(baseUrl, pulseApis, { axiosConfig }), creds);
   }
 
@@ -139,12 +149,12 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
    *
    * @link https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_pulse.htm#PulseSubscriptionService_ListSubscriptions
    */
-  listPulseMetricSubscriptionsForCurrentUser = async (): Promise<
-    PulseResult<PulseMetricSubscription[]>
-  > => {
+  listPulseMetricSubscriptionsForCurrentUser = async (
+    userId: string,
+  ): Promise<PulseResult<PulseMetricSubscription[]>> => {
     return await guardAgainstPulseDisabled(async () => {
       const response = await this._apiClient.listPulseMetricSubscriptionsForCurrentUser({
-        queries: { user_id: this.userId },
+        queries: { user_id: userId },
         ...this.authHeader,
       });
       return response.subscriptions ?? [];
@@ -270,8 +280,8 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
   generatePulseDiscoverBrief = async (
     question: string,
     metricIds: string[],
-    actionType: string = 'ACTION_TYPE_ANSWER',
-    role: string = 'ROLE_USER',
+    actionType: ActionTypeEnumType = 'ACTION_TYPE_ANSWER',
+    role: RoleEnumType = 'ROLE_USER',
   ): Promise<PulseResult<PulseDiscoverBrief>> => {
     return await guardAgainstPulseDisabled(async () => {
       // Fetch metrics and definitions to build the context
@@ -328,7 +338,8 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
               action_type: actionType,
               role: role,
               metric_group_context_resolved: true,
-              metric_group_context: metricGroupContext,
+
+              metric_group_context: metricGroupContext as any,
             },
           ],
         },
@@ -336,13 +347,15 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
       );
 
       if (!response.markup) {
-        throw new Error(`Failed to generate discover brief: No markup returned`);
+        throw new Error('Failed to generate discover brief: No markup returned');
       }
 
       // Map PulseInsightBriefResponse to PulseDiscoverBrief
       return {
         markup: response.markup,
         follow_up_questions: response.follow_up_questions,
+        source_insights: [],
+        group_context: metricGroupContext,
       };
     });
   };
@@ -377,6 +390,11 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
 
       const definition = definitionsResult.value[0];
 
+      const basicSpecification = definition.specification.basic_specification;
+      if (!basicSpecification) {
+        throw new Error(`Definition ${definition.metadata.id} is missing basic_specification`);
+      }
+
       // Build the bundle request
       const bundleRequest = {
         bundle_request: {
@@ -396,7 +414,7 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
             metric: {
               definition: {
                 datasource: definition.specification.datasource,
-                basic_specification: definition.specification.basic_specification,
+                basic_specification: basicSpecification,
                 is_running_total: definition.specification.is_running_total,
               },
               metric_specification: metric.specification,
@@ -431,15 +449,29 @@ export default class PulseMethods extends AuthenticatedMethods<typeof pulseApis>
   };
 }
 
-export type PulseDisabledError = 'tableau-server' | 'pulse-disabled';
-export type PulseResult<T> = Result<T, PulseDisabledError>;
+export type PulseResult<T> = Result<T, McpToolError>;
+
+// These Tableau error codes indicate AI-powered Pulse insights are disabled for the site.
+const PULSE_INSIGHTS_DISABLED_ERROR_CODES = ['0x62c06627', '0x8c454877', '0xd0495c24'] as const;
+
+export function hasPulseInsightsDisabledErrorCode(value: unknown): boolean {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  const normalizedValue = value.toLowerCase();
+  return PULSE_INSIGHTS_DISABLED_ERROR_CODES.some((errorCode) =>
+    normalizedValue.includes(errorCode),
+  );
+}
+
 async function guardAgainstPulseDisabled<T>(callback: () => Promise<T>): Promise<PulseResult<T>> {
   try {
     return new Ok(await callback());
   } catch (error) {
     if (isAxiosError(error)) {
       if (error.response?.status === 404) {
-        return new Err('tableau-server');
+        return new PulseNotAvailableError().toErr();
       }
 
       if (
@@ -448,7 +480,26 @@ async function guardAgainstPulseDisabled<T>(callback: () => Promise<T>): Promise
         error.response.headers.validation_code === '400999'
       ) {
         // ntbue-service-chassis/-/blob/main/server/interceptors/site_settings.go
-        return new Err('pulse-disabled');
+        return new PulseDisabledError().toErr();
+      }
+
+      const tableauErrorCode = error.response?.headers?.tableau_error_code;
+      const responseMessage = error.response?.data?.message;
+      if (
+        hasPulseInsightsDisabledErrorCode(tableauErrorCode) ||
+        hasPulseInsightsDisabledErrorCode(responseMessage)
+      ) {
+        return new PulseInsightsDisabledError().toErr();
+      }
+
+      if (error.response?.status) {
+        const formatted = formatPulseInsightsApiError(error.response.status, error.response.data);
+        return new PulseInsightsApiError(
+          formatted.message,
+          error.response.status,
+          formatted.errorCode,
+          formatted.details,
+        ).toErr();
       }
     }
 

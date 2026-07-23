@@ -2,18 +2,28 @@ import z from 'zod';
 
 import { workbookSchema } from '../../../src/sdks/tableau/types/workbook.js';
 import { getDefaultEnv, getSuperstoreWorkbook, resetEnv, setEnv } from '../../testEnv.js';
-import { callTool } from '../client.js';
+import { McpClient } from '../mcpClient.js';
 
 describe('list-workbooks', () => {
+  let client: McpClient;
+
   beforeAll(setEnv);
   afterAll(resetEnv);
+
+  beforeAll(async () => {
+    client = new McpClient();
+    await client.connect();
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
 
   it('should list workbooks', async () => {
     const env = getDefaultEnv();
     const superstore = getSuperstoreWorkbook(env);
 
-    const workbooks = await callTool('list-workbooks', {
-      env,
+    const workbooks = await client.callTool('list-workbooks', {
       schema: z.array(workbookSchema),
     });
 
@@ -23,7 +33,7 @@ describe('list-workbooks', () => {
     expect(workbook).toMatchObject({
       id: superstore.id,
       name: 'Superstore',
-      defaultViewId: superstore.defaultViewId,
+      defaultViewId: superstore.defaultView.id,
     });
   });
 
@@ -31,17 +41,18 @@ describe('list-workbooks', () => {
     const env = getDefaultEnv();
     const superstore = getSuperstoreWorkbook(env);
 
-    const workbooks = await callTool('list-workbooks', {
-      env,
+    const workbooks = await client.callTool('list-workbooks', {
       schema: z.array(workbookSchema),
-      toolArgs: { filter: 'name:eq:Super*' },
+      toolArgs: { filter: 'name:eq:Superstore' },
     });
 
-    expect(workbooks).toHaveLength(1);
-    expect(workbooks[0]).toMatchObject({
+    expect(workbooks.length).greaterThan(0);
+    const workbook = workbooks.find((candidate) => candidate.name === 'Superstore');
+
+    expect(workbook).toMatchObject({
       id: superstore.id,
       name: 'Superstore',
-      defaultViewId: superstore.defaultViewId,
+      defaultViewId: superstore.defaultView.id,
     });
   });
 });

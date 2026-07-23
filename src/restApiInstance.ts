@@ -1,7 +1,8 @@
 import { RequestId } from '@modelcontextprotocol/sdk/types.js';
 
-import { Config, getConfig } from './config.js';
-import { log, shouldLogWhenLevelIsAtLeast } from './logging/log.js';
+import { getConfig } from './config.js';
+import { log } from './logging/logger.js';
+import { notifier, shouldNotifyWhenLevelIsAtLeast } from './logging/notification.js';
 import { maskRequest, maskResponse } from './logging/secretMask.js';
 import {
   AxiosResponseInterceptorConfig,
@@ -12,10 +13,11 @@ import {
   RequestInterceptorConfig,
   ResponseInterceptor,
   ResponseInterceptorConfig,
-} from './sdks/tableau/interceptors.js';
+} from './sdks/interceptors.js';
+import { buildAuthConfig } from './sdks/tableau/buildAuthConfig.js';
 import { RestApi } from './sdks/tableau/restApi.js';
-import { Server, userAgent } from './server.js';
-import { TableauAuthInfo } from './server/oauth/schemas.js';
+import { Server } from './server.js';
+import { TableauWebRequestHandlerExtra } from './tools/web/toolContext.js';
 import { isAxiosError } from './utils/axios.js';
 import { getExceptionMessage } from './utils/getExceptionMessage.js';
 import invariant from './utils/invariant.js';
@@ -28,123 +30,165 @@ type JwtScopes =
   | 'tableau:metric_subscriptions:read'
   | 'tableau:insights:read'
   | 'tableau:views:download'
-  | 'tableau:insight_brief:create';
+  | 'tableau:views:embed'
+  | 'tableau:insight_brief:create'
+  | 'tableau:mcp_site_settings:read'
+  | 'tableau:tasks:read'
+  | 'tableau:tasks:delete'
+  | 'tableau:tasks:write'
+  | 'tableau:workbook_tags:update'
+  | 'tableau:workbooks:delete'
+  | 'tableau:datasource_tags:update'
+  | 'tableau:datasources:delete'
+  | 'tableau:jobs:read'
+  | 'tableau:flow_tasks:read'
+  | 'tableau:users:read'
+  | 'tableau:users:update'
+  | 'tableau:flows:read'
+  | 'tableau:flow_connections:read'
+  | 'tableau:flow_runs:read';
 
-const getNewRestApiInstanceAsync = async (
-  config: Config,
-  requestId: RequestId,
-  server: Server,
-  jwtScopes: Set<JwtScopes>,
-  signal: AbortSignal,
-  authInfo?: TableauAuthInfo,
-): Promise<RestApi> => {
-  signal.addEventListener(
-    'abort',
-    () => {
-      log.info(
-        server,
-        {
-          type: 'request-cancelled',
-          requestId,
-          reason: signal.reason,
-        },
-        { logger: server.name, requestId },
-      );
-    },
-    { once: true },
+export type RestApiArgs = Pick<
+  TableauWebRequestHandlerExtra,
+  'config' | 'server' | 'signal' | 'tableauAuthInfo' | 'setSiteLuid' | 'setUserLuid'
+> &
+  (
+    | {
+        requestId: RequestId;
+        disableLogging?: false;
+      }
+    | {
+        disableLogging: true;
+      }
   );
 
-  const tableauServer = config.server || authInfo?.server;
+const getNewRestApiInstanceAsync = async (
+  args: RestApiArgs & {
+    jwtScopes: Set<JwtScopes>;
+  },
+): Promise<{ restApi: RestApi; signOutWhenCompleted: boolean }> => {
+  const {
+    config,
+    server,
+    jwtScopes,
+    signal,
+    tableauAuthInfo,
+    disableLogging,
+    setSiteLuid,
+    setUserLuid,
+  } = args;
+
+  if (!disableLogging) {
+    const { requestId } = args;
+    signal.addEventListener(
+      'abort',
+      () => {
+        notifier.info(
+          server.mcpServer,
+          {
+            type: 'request-cancelled',
+            requestId,
+            reason: signal.reason,
+          },
+          { notifier: server.name, requestId },
+        );
+      },
+      { once: true },
+    );
+  }
+
+  const tableauServer = config.server || tableauAuthInfo?.server;
   invariant(tableauServer, 'Tableau server could not be determined');
 
-  const restApi = new RestApi(tableauServer, {
+  const restApi = new RestApi({
     maxRequestTimeoutMs: config.maxRequestTimeoutMs,
     signal,
-    requestInterceptor: [
-      getRequestInterceptor(server, requestId),
-      getRequestErrorInterceptor(server, requestId),
-    ],
-    responseInterceptor: [
-      getResponseInterceptor(server, requestId),
-      getResponseErrorInterceptor(server, requestId),
-    ],
+    requestInterceptor: disableLogging
+      ? undefined
+      : [
+          getRequestInterceptor(server, args.requestId),
+          getRequestErrorInterceptor(server, args.requestId),
+        ],
+    responseInterceptor: disableLogging
+      ? undefined
+      : [
+          getResponseInterceptor(server, args.requestId),
+          getResponseErrorInterceptor(server, args.requestId),
+        ],
   });
 
-  if (config.auth === 'pat') {
-    await restApi.signIn({
-      type: 'pat',
-      patName: config.patName,
-      patValue: config.patValue,
-      siteName: config.siteName,
-    });
-  } else if (config.auth === 'direct-trust') {
-    await restApi.signIn({
-      type: 'direct-trust',
-      siteName: config.siteName,
-      username: getJwtUsername(config, authInfo),
-      clientId: config.connectedAppClientId,
-      secretId: config.connectedAppSecretId,
-      secretValue: config.connectedAppSecretValue,
-      scopes: jwtScopes,
-      additionalPayload: getJwtAdditionalPayload(config, authInfo),
-    });
-  } else if (config.auth === 'uat') {
-    await restApi.signIn({
-      type: 'uat',
-      siteName: config.siteName,
-      username: getJwtUsername(config, authInfo),
-      tenantId: config.uatTenantId,
-      issuer: config.uatIssuer,
-      usernameClaimName: config.uatUsernameClaimName,
-      privateKey: config.uatPrivateKey,
-      keyId: config.uatKeyId,
-      scopes: jwtScopes,
-      additionalPayload: getJwtAdditionalPayload(config, authInfo),
-    });
-  } else {
-    if (!authInfo?.accessToken || !authInfo?.userId) {
+  let signOutWhenCompleted = true;
+  if (tableauAuthInfo?.type === 'Passthrough') {
+    if (!tableauAuthInfo.raw || !tableauAuthInfo.userId) {
       throw new Error('Auth info is required when not signing in first.');
     }
 
-    restApi.setCredentials(authInfo.accessToken, authInfo.userId);
+    signOutWhenCompleted = false;
+    restApi.setCredentials(tableauAuthInfo.raw, tableauAuthInfo.userId);
+  } else {
+    const authConfig = buildAuthConfig({ config, tableauAuthInfo, scopes: jwtScopes });
+    if (authConfig) {
+      await restApi.signIn(authConfig);
+      setSiteLuid?.(restApi.siteId);
+      setUserLuid?.(restApi.userId);
+    } else {
+      // oauth: buildAuthConfig returns null — preserve the existing oauth handling.
+      invariant(tableauAuthInfo, 'Tableau auth info not provided.');
+
+      signOutWhenCompleted = false;
+      if (tableauAuthInfo?.type === 'Bearer') {
+        restApi.setBearerToken(tableauAuthInfo.raw);
+      } else if (tableauAuthInfo?.type === 'X-Tableau-Auth') {
+        if (!tableauAuthInfo?.accessToken || !tableauAuthInfo?.userId) {
+          throw new Error('Auth info is required when not signing in first.');
+        }
+
+        restApi.setCredentials(tableauAuthInfo.accessToken, tableauAuthInfo.userId);
+      } else {
+        throw new Error('Auth info is required when not signing in first.');
+      }
+    }
   }
 
-  return restApi;
+  return { restApi, signOutWhenCompleted };
 };
 
-export const useRestApi = async <T>({
-  config,
-  requestId,
-  server,
-  callback,
-  jwtScopes,
-  signal,
-  authInfo,
-}: {
-  config: Config;
-  requestId: RequestId;
-  server: Server;
-  jwtScopes: Array<JwtScopes>;
-  signal: AbortSignal;
-  callback: (restApi: RestApi) => Promise<T>;
-  authInfo?: TableauAuthInfo;
-}): Promise<T> => {
-  const restApi = await getNewRestApiInstanceAsync(
-    config,
-    requestId,
-    server,
-    new Set(jwtScopes),
-    signal,
-    authInfo,
-  );
+export const useRestApi = async <T>(
+  args: RestApiArgs & {
+    jwtScopes: ReadonlyArray<JwtScopes>;
+    callback: (restApi: RestApi) => Promise<T>;
+  },
+): Promise<T> => {
+  const { callback, ...remaining } = args;
+  const { restApi, signOutWhenCompleted } = await getNewRestApiInstanceAsync({
+    ...remaining,
+    jwtScopes: new Set(args.jwtScopes),
+  });
   try {
     return await callback(restApi);
   } finally {
-    if (config.auth !== 'oauth') {
+    if (signOutWhenCompleted) {
       // Tableau REST sessions for 'pat' and 'direct-trust' are intentionally ephemeral.
-      // Sessions for 'oauth' are not. Signing out would invalidate the session,
+      // Sessions for 'oauth' and 'passthrough' are not. Signing out would invalidate the session,
       // preventing the access token from being reused for subsequent requests.
-      await restApi.signOut();
+      //
+      // Isolate the sign-out so a teardown failure can NEVER mask the callback's real result or
+      // error. A throw inside `finally` replaces whatever the `try` was returning or throwing, so an
+      // un-caught sign-out error would clobber the real outcome — e.g. a callback that 404s on a
+      // missing resource surfaces to the caller as the sign-out's 401 once the session is torn down
+      // (W-23202034). Swallow-and-log instead: sign-out is best-effort cleanup, and the ephemeral
+      // session expires on its own regardless.
+      try {
+        await restApi.signOut();
+        log({ message: 'Signed out of Tableau REST API', level: 'debug', logger: 'auth' });
+      } catch (error) {
+        log({
+          message: `Failed to sign out of Tableau REST API: ${getExceptionMessage(error)}`,
+          level: 'warning',
+          logger: 'auth',
+          data: error,
+        });
+      }
     }
   }
 };
@@ -152,7 +196,7 @@ export const useRestApi = async <T>({
 export const getRequestInterceptor =
   (server: Server, requestId: RequestId): RequestInterceptor =>
   (request) => {
-    request.headers['User-Agent'] = getUserAgent(server);
+    request.headers['User-Agent'] = server.userAgent;
     logRequest(server, request, requestId);
     return request;
   };
@@ -161,10 +205,20 @@ export const getRequestErrorInterceptor =
   (server: Server, requestId: RequestId): ErrorInterceptor =>
   (error, baseUrl) => {
     if (!isAxiosError(error) || !error.request) {
-      log.error(server, `Request ${requestId} failed with error: ${getExceptionMessage(error)}`, {
+      log({
+        message: `Request ${requestId} failed`,
+        level: 'error',
         logger: 'rest-api',
-        requestId,
+        data: error,
       });
+      notifier.error(
+        server.mcpServer,
+        `Request ${requestId} failed with error: ${getExceptionMessage(error)}`,
+        {
+          notifier: 'rest-api',
+          requestId,
+        },
+      );
       return;
     }
 
@@ -190,10 +244,16 @@ export const getResponseErrorInterceptor =
   (server: Server, requestId: RequestId): ErrorInterceptor =>
   (error, baseUrl) => {
     if (!isAxiosError(error) || !error.response) {
-      log.error(
-        server,
+      log({
+        message: `Response from request ${requestId} failed`,
+        level: 'error',
+        logger: 'rest-api',
+        data: error,
+      });
+      notifier.error(
+        server.mcpServer,
         `Response from request ${requestId} failed with error: ${getExceptionMessage(error)}`,
-        { logger: 'rest-api', requestId },
+        { notifier: 'rest-api', requestId },
       );
       return;
     }
@@ -225,14 +285,14 @@ function logRequest(server: Server, request: RequestInterceptorConfig, requestId
     requestId,
     method: maskedRequest.method,
     url: url.toString(),
-    ...(shouldLogWhenLevelIsAtLeast('debug') && {
+    ...(shouldNotifyWhenLevelIsAtLeast('debug') && {
       headers: maskedRequest.headers,
       data: maskedRequest.data,
       params: maskedRequest.params,
     }),
   } as const;
 
-  log.info(server, messageObj, { logger: 'rest-api', requestId });
+  notifier.info(server.mcpServer, messageObj, { notifier: 'rest-api', requestId });
 }
 
 function logResponse(
@@ -245,42 +305,19 @@ function logResponse(
   const url = new URL(
     `${maskedResponse.baseUrl.replace(/\/$/, '')}/${maskedResponse.url?.replace(/^\//, '') ?? ''}`,
   );
-  if (response.request?.params && Object.keys(response.request.params).length > 0) {
-    url.search = new URLSearchParams(response.request.params).toString();
+  if (response.params && Object.keys(response.params).length > 0) {
+    url.search = new URLSearchParams(response.params).toString();
   }
   const messageObj = {
     type: 'response',
     requestId,
     url: url.toString(),
     status: maskedResponse.status,
-    ...(shouldLogWhenLevelIsAtLeast('debug') && {
+    ...(shouldNotifyWhenLevelIsAtLeast('debug') && {
       headers: maskedResponse.headers,
       data: maskedResponse.data,
     }),
   } as const;
 
-  log.info(server, messageObj, { logger: 'rest-api', requestId });
-}
-
-function getUserAgent(server: Server): string {
-  const userAgentParts = [userAgent];
-  if (server.clientInfo) {
-    const { name, version } = server.clientInfo;
-    if (name) {
-      userAgentParts.push(version ? `(${name} ${version})` : `(${name})`);
-    }
-  }
-  return userAgentParts.join(' ');
-}
-
-function getJwtUsername(config: Config, authInfo: TableauAuthInfo | undefined): string {
-  return config.jwtUsername.replaceAll('{OAUTH_USERNAME}', authInfo?.username ?? '');
-}
-
-function getJwtAdditionalPayload(
-  config: Config,
-  authInfo: TableauAuthInfo | undefined,
-): Record<string, unknown> {
-  const json = config.jwtAdditionalPayload.replaceAll('{OAUTH_USERNAME}', authInfo?.username ?? '');
-  return JSON.parse(json || '{}');
+  notifier.info(server.mcpServer, messageObj, { notifier: 'rest-api', requestId });
 }

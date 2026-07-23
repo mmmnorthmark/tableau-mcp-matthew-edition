@@ -1,15 +1,15 @@
-import { RequestHandler } from 'express';
-import express from 'express';
+import express, { RequestHandler } from 'express';
 
 import { getConfig } from '../../../config.js';
-import { OAuthProvider } from '../provider.js';
+import { EmbeddedOAuthProvider, TableauOAuthProvider } from '../provider.js';
 import { GoogleOAuthProvider } from './GoogleOAuthProvider.js';
 
 /**
  * Interface for OAuth providers
  *
- * Both Tableau and Google OAuth providers implement this interface,
- * allowing them to be used interchangeably in the Express server.
+ * Tableau (embedded or external authz server) and Google OAuth providers all
+ * implement this interface, allowing them to be used interchangeably in the
+ * Express server.
  */
 export interface IOAuthProvider {
   readonly authMiddleware: RequestHandler;
@@ -19,8 +19,8 @@ export interface IOAuthProvider {
 /**
  * Factory function to create the appropriate OAuth provider
  *
- * Returns GoogleOAuthProvider when OAUTH_PROVIDER=google,
- * otherwise returns the default Tableau OAuthProvider.
+ * Returns GoogleOAuthProvider when OAUTH_PROVIDER=google, otherwise the
+ * embedded or Tableau authorization-server provider per OAUTH_EMBEDDED_AUTHZ_SERVER.
  */
 export function createOAuthProvider(): IOAuthProvider {
   const config = getConfig();
@@ -29,5 +29,7 @@ export function createOAuthProvider(): IOAuthProvider {
     return new GoogleOAuthProvider();
   }
 
-  return new OAuthProvider();
+  return config.oauth.embeddedAuthzServer
+    ? new EmbeddedOAuthProvider()
+    : new TableauOAuthProvider();
 }

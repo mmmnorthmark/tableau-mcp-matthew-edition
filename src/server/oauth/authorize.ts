@@ -1,21 +1,25 @@
-import axiosRetry from 'axios-retry';
 import { randomBytes, randomInt, randomUUID } from 'crypto';
 import express from 'express';
 import { isIP } from 'net';
 import { isSSRFSafeURL } from 'ssrfcheck';
 import { Err, Ok, Result } from 'ts-results-es';
-import { fromError } from 'zod-validation-error';
+import { fromError } from 'zod-validation-error/v3';
 
-import { getConfig, ONE_DAY_IN_MS } from '../../config.js';
-import { axios, AxiosResponse, getStringResponseHeader } from '../../utils/axios.js';
+import { getConfig } from '../../config.js';
+import { log } from '../../logging/logger.js';
+import { axios, AxiosResponse, getStringResponseHeader, isAxiosError } from '../../utils/axios.js';
+import { milliseconds } from '../../utils/milliseconds.js';
 import { parseUrl } from '../../utils/parseUrl.js';
+import { retry } from '../../utils/retry.js';
 import { setLongTimeout } from '../../utils/setLongTimeout.js';
 import { clientMetadataCache } from './clientMetadataCache.js';
 import { getDnsResolver } from './dnsResolver.js';
 import { generateCodeChallenge } from './generateCodeChallenge.js';
 import { isValidRedirectUri } from './isValidRedirectUri.js';
+import { matchesRegisteredRedirectUri } from './matchesRegisteredRedirectUri.js';
 import { TABLEAU_CLOUD_SERVER_URL } from './provider.js';
 import { cimdMetadataSchema, ClientMetadata, mcpAuthorizeSchema } from './schemas.js';
+import { getSupportedScopes, parseScopes, validateScopes } from './scopes.js';
 import { PendingAuthorization } from './types.js';
 
 /**
@@ -31,7 +35,7 @@ export function authorize(
 ): void {
   const config = getConfig();
 
-  app.get('/oauth/authorize', async (req, res) => {
+  app.get('/oauth2/authorize', async (req, res) => {
     const result = mcpAuthorizeSchema.safeParse(req.query);
 
     if (!result.success) {
@@ -42,9 +46,17 @@ export function authorize(
       return;
     }
 
-    const { client_id, redirect_uri, response_type, code_challenge, code_challenge_method, state } =
-      result.data;
+    const {
+      client_id,
+      redirect_uri,
+      response_type,
+      code_challenge,
+      code_challenge_method,
+      state,
+      scope,
+    } = result.data;
 
+    let clientName: string | undefined;
     const clientIdUrl = parseUrl(client_id);
     if (clientIdUrl) {
       // Client ID is a URL, so we need to attempt to fetch the client metadata from the URL
@@ -54,7 +66,8 @@ export function authorize(
         return;
       }
 
-      const { redirect_uris, response_types } = clientResult.value;
+      const { redirect_uris, response_types, client_name } = clientResult.value;
+      clientName = client_name;
 
       if (response_types && !response_types.find((type) => type === response_type)) {
         res.status(400).json({
@@ -64,7 +77,10 @@ export function authorize(
         return;
       }
 
-      if (redirect_uris && !redirect_uris.includes(redirect_uri)) {
+      if (
+        redirect_uris &&
+        !redirect_uris.some((uri) => matchesRegisteredRedirectUri(redirect_uri, uri))
+      ) {
         res.status(400).json({
           error: 'invalid_request',
           error_description: `Invalid redirect URI: ${redirect_uri}`,
@@ -97,6 +113,28 @@ export function authorize(
       return;
     }
 
+    const { enforceScopes, advertiseApiScopes } = config.oauth;
+    const requestedScopes = parseScopes(scope);
+    const { valid: validScopes, invalid: invalidScopes } = validateScopes(
+      requestedScopes,
+      await getSupportedScopes({ includeApiScopes: advertiseApiScopes }),
+    );
+
+    if (invalidScopes.length > 0) {
+      res.status(400).json({
+        error: 'invalid_scope',
+        error_description: `Unsupported scopes: ${invalidScopes.join(', ')}`,
+      });
+      return;
+    }
+
+    const scopesToGrant =
+      validScopes.length > 0
+        ? validScopes
+        : enforceScopes
+          ? await getSupportedScopes({ includeApiScopes: advertiseApiScopes })
+          : [];
+
     // Generate Tableau state and store pending authorization
     const tableauState = randomBytes(32).toString('hex');
     const authKey = randomBytes(32).toString('hex');
@@ -114,6 +152,7 @@ export function authorize(
       tableauState,
       tableauClientId,
       tableauCodeVerifier,
+      scopes: scopesToGrant,
     });
 
     // Clean up expired authorizations
@@ -130,7 +169,7 @@ export function authorize(
     oauthUrl.searchParams.set('state', `${authKey}:${tableauState}`);
     oauthUrl.searchParams.set('device_id', randomUUID());
     oauthUrl.searchParams.set('target_site', config.siteName);
-    oauthUrl.searchParams.set('device_name', getDeviceName(redirect_uri, state ?? ''));
+    oauthUrl.searchParams.set('device_name', getDeviceName(redirect_uri, state ?? '', clientName));
     oauthUrl.searchParams.set('client_type', 'tableau-mcp');
 
     if (config.oauth.lockSite) {
@@ -170,7 +209,13 @@ async function getOAuthRedirectUrl(
         return locationUrl;
       }
     }
-  } catch {
+  } catch (error) {
+    log({
+      message: 'Failed to follow Tableau OAuth redirect for site picker',
+      level: 'error',
+      logger: 'oauth',
+      data: error,
+    });
     return initialOAuthUrl;
   }
 
@@ -206,7 +251,13 @@ async function getClientFromMetadataDoc(
       }
       // Replace the hostname with the resolved IP Address
       clientMetadataUrl.hostname = ipAddress;
-    } catch {
+    } catch (error) {
+      log({
+        message: `DNS resolution failed for client metadata URL ${clientMetadataUrl.hostname}`,
+        level: 'error',
+        logger: 'oauth',
+        data: error,
+      });
       return Err({
         error: 'invalid_request',
         error_description: 'IP address of Client Metadata URL could not be resolved',
@@ -229,18 +280,39 @@ async function getClientFromMetadataDoc(
   let response: AxiosResponse;
   try {
     const client = axios.create();
-    axiosRetry(client, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
+    response = await retry(
+      () =>
+        client.get(clientMetadataUrl.toString(), {
+          timeout: 5000,
+          maxContentLength: 5 * 1024, // 5 KB
+          maxRedirects: 3,
+          headers: {
+            Accept: 'application/json',
+            Host: originalHostname,
+          },
+        }),
+      {
+        retryIf: (error) => {
+          if (!isAxiosError(error)) {
+            return true;
+          }
 
-    response = await client.get(clientMetadataUrl.toString(), {
-      timeout: 5000,
-      maxContentLength: 5 * 1024, // 5 KB
-      maxRedirects: 3,
-      headers: {
-        Accept: 'application/json',
-        Host: originalHostname,
+          const status = error.response?.status;
+          if (status) {
+            return status >= 500 && status < 600;
+          }
+
+          return true;
+        },
       },
+    );
+  } catch (error) {
+    log({
+      message: `Failed to fetch client metadata from ${originalUrl}`,
+      level: 'error',
+      logger: 'oauth',
+      data: error,
     });
-  } catch {
     return Err({
       error: 'invalid_request',
       error_description: 'Unable to fetch client metadata',
@@ -295,7 +367,10 @@ async function getClientFromMetadataDoc(
   if (cacheControlMaxAge) {
     const cacheControlMaxAgeSeconds = parseInt(cacheControlMaxAge);
     if (!isNaN(cacheControlMaxAgeSeconds) && cacheControlMaxAgeSeconds >= 0) {
-      cacheExpiryMs = Math.min(ONE_DAY_IN_MS, cacheControlMaxAgeSeconds * 1000);
+      cacheExpiryMs = Math.min(
+        milliseconds.fromDays(1),
+        milliseconds.fromSeconds(cacheControlMaxAgeSeconds),
+      );
     }
   }
 
@@ -306,7 +381,11 @@ async function getClientFromMetadataDoc(
   return Ok(clientMetadataResult.data);
 }
 
-function getDeviceName(redirectUri: string, state: string): string {
+function getDeviceName(redirectUri: string, state: string, clientName: string | undefined): string {
+  if (clientName) {
+    return `tableau-mcp (${clientName})`;
+  }
+
   const defaultDeviceName = 'tableau-mcp (Unknown agent)';
 
   try {
@@ -328,3 +407,5 @@ function getDeviceName(redirectUri: string, state: string): string {
     return defaultDeviceName;
   }
 }
+
+export const exportedForTesting = { getDeviceName };

@@ -5,6 +5,7 @@ import { readFileSync } from 'fs';
 import { getConfig } from '../../../config.js';
 import { oauthAuthorizationServer } from '../.well-known/oauth-authorization-server.js';
 import { oauthProtectedResource } from '../.well-known/oauth-protected-resource.js';
+import { EmbeddedAccessTokenValidator } from '../accessTokenValidator.js';
 import { authMiddleware } from '../authMiddleware.js';
 import { googleAuthorize } from '../google/authorize.js';
 import { googleCallback } from '../google/callback.js';
@@ -70,7 +71,7 @@ export class GoogleOAuthProvider implements IOAuthProvider {
   }
 
   get authMiddleware(): RequestHandler {
-    return authMiddleware(this.privateKey);
+    return authMiddleware(new EmbeddedAccessTokenValidator(this.privateKey));
   }
 
   setupRoutes(app: express.Application): void {

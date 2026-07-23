@@ -1,6 +1,7 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { randomUUID } from 'crypto';
 
+import { log } from './logging/logger.js';
 import { ClientInfo } from './server.js';
 
 export type Session = {
@@ -22,6 +23,7 @@ export const createSession = ({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (sessionId) => {
       sessions[sessionId] = { transport, clientInfo, mcpServerUrl };
+      log({ message: `Session created: ${sessionId}`, level: 'debug', logger: 'session' });
     },
   });
 
@@ -40,4 +42,5 @@ export const getSession = (sessionId: string): Session | undefined => {
 
 const deleteSession = (sessionId: string): void => {
   delete sessions[sessionId];
+  log({ message: `Session closed: ${sessionId}`, level: 'debug', logger: 'session' });
 };

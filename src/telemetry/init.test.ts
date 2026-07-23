@@ -1,15 +1,7 @@
-import { MockInstance } from 'vitest';
-
+import { stubDefaultEnvVars } from '../testShared.js';
 import { initializeTelemetry } from './init.js';
-import { TelemetryConfig } from './types.js';
-
 const mocks = vi.hoisted(() => ({
-  mockGetConfig: vi.fn(),
   MockNoOpTelemetryProvider: vi.fn(),
-}));
-
-vi.mock('../config.js', () => ({
-  getConfig: mocks.mockGetConfig,
 }));
 
 vi.mock('./noop.js', () => ({
@@ -17,52 +9,37 @@ vi.mock('./noop.js', () => ({
 }));
 
 describe('initializeTelemetry', () => {
-  const defaultTelemetryConfig: TelemetryConfig = {
-    provider: 'noop',
-  };
-
-  let consoleErrorSpy: MockInstance;
-  let consoleWarnSpy: MockInstance;
-
   beforeEach(() => {
     vi.clearAllMocks();
-
-    // Suppress console output
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.unstubAllEnvs();
+    stubDefaultEnvVars();
 
     // Default mock implementations
     mocks.MockNoOpTelemetryProvider.mockImplementation(() => ({
       initialize: vi.fn(),
       recordMetric: vi.fn(),
+      recordHistogram: vi.fn(),
     }));
   });
 
   afterEach(() => {
-    consoleErrorSpy.mockRestore();
-    consoleWarnSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 
-  // NoOp tests
   it('returns NoOpTelemetryProvider when provider is "noop"', () => {
-    mocks.mockGetConfig.mockReturnValue({
-      telemetry: { ...defaultTelemetryConfig, provider: 'noop' },
-    });
+    vi.stubEnv('TELEMETRY_PROVIDER', 'noop');
 
     initializeTelemetry();
 
     expect(mocks.MockNoOpTelemetryProvider).toHaveBeenCalled();
   });
 
-  it('returns NoOpTelemetryProvider for unknown provider with warning', () => {
-    mocks.mockGetConfig.mockReturnValue({
-      telemetry: { ...defaultTelemetryConfig, provider: 'unknown-provider' },
-    });
+  it('returns NoOpTelemetryProvider when provider is "custom" and module path is invalid', () => {
+    vi.stubEnv('TELEMETRY_PROVIDER', 'custom');
+    vi.stubEnv('TELEMETRY_PROVIDER_CONFIG', '{"module":"./invalid-module.js"}');
 
     initializeTelemetry();
 
     expect(mocks.MockNoOpTelemetryProvider).toHaveBeenCalled();
-    expect(consoleErrorSpy).toHaveBeenCalled();
-    expect(consoleWarnSpy).toHaveBeenCalledWith('Falling back to NoOp telemetry provider');
   });
 });
