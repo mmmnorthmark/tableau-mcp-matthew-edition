@@ -767,6 +767,98 @@ const envVars = {
     required: false,
     sensitive: false,
   },
+  IDENTITY_HEADER: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Identity Gateway Header',
+    description:
+      'HTTP header name carrying the identity-gateway JWT. Defaults to cf-access-jwt-assertion (Cloudflare Access).',
+    required: false,
+    sensitive: false,
+  },
+  IDENTITY_JWKS_URL: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Identity Gateway JWKS URL',
+    description: "Full URL of the identity gateway's JWKS endpoint used to verify identity JWTs.",
+    required: false,
+    sensitive: false,
+  },
+  IDENTITY_ISSUER: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Identity Gateway Issuer',
+    description: 'Expected iss claim of identity-gateway JWTs.',
+    required: false,
+    sensitive: false,
+  },
+  IDENTITY_AUDIENCE: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Identity Gateway Audience',
+    description: 'Expected aud claim of identity-gateway JWTs.',
+    required: false,
+    sensitive: false,
+  },
+  IDENTITY_EMAIL_CLAIM: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Identity Email Claim',
+    description:
+      "Claim name carrying the user's email in identity-gateway JWTs. Defaults to email.",
+    required: false,
+    sensitive: false,
+  },
+  IDENTITY_GROUPS_CLAIM: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Identity Groups Claim',
+    description:
+      'Claim name carrying group memberships (string array) in identity-gateway JWTs. Defaults to groups.',
+    required: false,
+    sensitive: false,
+  },
+  CF_ACCESS_TEAM_DOMAIN: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Cloudflare Access Team Domain',
+    description:
+      'Cloudflare Access team domain (the <team> in https://<team>.cloudflareaccess.com). With CF_ACCESS_AUD, derives the identity-gateway JWKS URL, issuer, and audience.',
+    required: false,
+    sensitive: false,
+  },
+  CF_ACCESS_AUD: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Cloudflare Access Application AUD',
+    description: 'Cloudflare Access application audience (AUD) tag used to verify Access JWTs.',
+    required: false,
+    sensitive: false,
+  },
+  IDENTITY_ROLE_ADMIN_GROUPS: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Identity Admin Role Groups',
+    description: 'Comma-separated identity-gateway group names granted the admin role.',
+    required: false,
+    sensitive: false,
+  },
+  IDENTITY_ROLE_WRITER_GROUPS: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Identity Writer Role Groups',
+    description: 'Comma-separated identity-gateway group names granted the writer role.',
+    required: false,
+    sensitive: false,
+  },
+  IDENTITY_ROLE_READER_GROUPS: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Identity Reader Role Groups',
+    description: 'Comma-separated identity-gateway group names granted the reader role.',
+    required: false,
+    sensitive: false,
+  },
 } satisfies EnvVars;
 
 const userConfig = Object.entries(envVars).reduce<Record<string, McpbUserConfigurationOption>>(

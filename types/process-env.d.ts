@@ -91,6 +91,17 @@ export interface ProcessEnvWeb extends ProcessEnvBase {
   ADMIN_GATE_CACHE_TTL_MINUTES: string | undefined;
   STALE_CONTENT_MIN_AGE_DAYS: string | undefined;
   STALE_CONTENT_MAX_ROWS: string | undefined;
+  IDENTITY_HEADER: string | undefined;
+  IDENTITY_JWKS_URL: string | undefined;
+  IDENTITY_ISSUER: string | undefined;
+  IDENTITY_AUDIENCE: string | undefined;
+  IDENTITY_EMAIL_CLAIM: string | undefined;
+  IDENTITY_GROUPS_CLAIM: string | undefined;
+  CF_ACCESS_TEAM_DOMAIN: string | undefined;
+  CF_ACCESS_AUD: string | undefined;
+  IDENTITY_ROLE_ADMIN_GROUPS: string | undefined;
+  IDENTITY_ROLE_WRITER_GROUPS: string | undefined;
+  IDENTITY_ROLE_READER_GROUPS: string | undefined;
 }
 
 export interface ProcessEnvDesktop extends ProcessEnvBase {
