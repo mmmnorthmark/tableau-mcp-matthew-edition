@@ -1,0 +1,57 @@
+# Build → push → update tableau-matthewmillertableau-dev on every push to main.
+#
+# TEMPLATE KEPT IN THE DEPLOY REPO: this file is the source-of-truth
+# template that stays in sync with the deploy scripts. Copy it into the
+# APP repo root (tableau-mcp-matthew-edition/cloudbuild.yaml) — the Cloud
+# Build trigger reads it from there, since the trigger fires on commits to
+# the app repo.
+#
+# Read by the 'tableau-matthewmillertableau-dev-on-main' Cloud Build
+# trigger. The trigger runs as a deploy service account configured in GCP.
+#
+# `services update` (not `deploy`) preserves env vars, secret refs, and
+# scaling that ./deploy.sh dev already set — the trigger only swaps the
+# image. Building with the app repo's own Dockerfile (repo root, no path
+# prefixes).
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --platform=linux/amd64
+      - -t
+      - gcr.io/$PROJECT_ID/tableau-matthewmillertableau-dev:$COMMIT_SHA
+      - -t
+      - gcr.io/$PROJECT_ID/tableau-matthewmillertableau-dev:latest
+      - .
+
+  - id: push-sha
+    name: gcr.io/cloud-builders/docker
+    args: [push, gcr.io/$PROJECT_ID/tableau-matthewmillertableau-dev:$COMMIT_SHA]
+
+  - id: push-latest
+    name: gcr.io/cloud-builders/docker
+    args: [push, gcr.io/$PROJECT_ID/tableau-matthewmillertableau-dev:latest]
+
+  - id: deploy-dev
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - tableau-matthewmillertableau-dev
+      - --image=gcr.io/$PROJECT_ID/tableau-matthewmillertableau-dev:$COMMIT_SHA
+      - --region=us-central1
+
+# Required when running with a user-managed service account that has no
+# attached storage bucket — without it Cloud Build refuses to start.
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+images:
+  - gcr.io/$PROJECT_ID/tableau-matthewmillertableau-dev:$COMMIT_SHA
+  - gcr.io/$PROJECT_ID/tableau-matthewmillertableau-dev:latest
+
+timeout: 1200s

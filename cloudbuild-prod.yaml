@@ -1,0 +1,58 @@
+# Build → push → update tableau-matthewmillertableau on every git tag v*.
+#
+# TEMPLATE KEPT IN THE DEPLOY REPO: this file is the source-of-truth
+# template that stays in sync with the deploy scripts. Copy it into the
+# APP repo root (tableau-mcp-matthew-edition/cloudbuild-prod.yaml) — the
+# Cloud Build trigger reads it from there, since the trigger fires on tags
+# pushed to the app repo.
+#
+# Read by the 'tableau-matthewmillertableau-on-tag' Cloud Build trigger.
+# Trigger fires on tags matching ^v.*$ pushed to GitHub
+# (e.g., `git tag v0.1.3 && git push origin v0.1.3`).
+#
+# Image is tagged with the git tag itself ($TAG_NAME) so prod's running
+# image name is human-readable: tableau-matthewmillertableau:v0.1.3.
+#
+# `services update` (not `deploy`) preserves env vars, secret refs, and
+# scaling config that the prod service already has — we only swap the
+# image.
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --platform=linux/amd64
+      - -t
+      - gcr.io/$PROJECT_ID/tableau-matthewmillertableau:$TAG_NAME
+      - -t
+      - gcr.io/$PROJECT_ID/tableau-matthewmillertableau:latest
+      - .
+
+  - id: push-tag
+    name: gcr.io/cloud-builders/docker
+    args: [push, gcr.io/$PROJECT_ID/tableau-matthewmillertableau:$TAG_NAME]
+
+  - id: push-latest
+    name: gcr.io/cloud-builders/docker
+    args: [push, gcr.io/$PROJECT_ID/tableau-matthewmillertableau:latest]
+
+  - id: deploy-prod
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - tableau-matthewmillertableau
+      - --image=gcr.io/$PROJECT_ID/tableau-matthewmillertableau:$TAG_NAME
+      - --region=us-central1
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+images:
+  - gcr.io/$PROJECT_ID/tableau-matthewmillertableau:$TAG_NAME
+  - gcr.io/$PROJECT_ID/tableau-matthewmillertableau:latest
+
+timeout: 1200s
