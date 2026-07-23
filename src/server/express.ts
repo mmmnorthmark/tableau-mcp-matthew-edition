@@ -18,6 +18,7 @@ import { Server } from '../server.js';
 import { WebMcpServer } from '../server.web.js';
 import { createSession, getSession, Session } from '../sessions.js';
 import { handleAssetRequest, handleDefaultsRequest } from './assetRoutes.js';
+import { identityGatewayMiddleware } from './auth/identityGatewayMiddleware.js';
 import { latencyMiddleware } from './latencyMiddleware.js';
 import { handlePingRequest } from './middleware.js';
 import { getTableauAuthInfo } from './oauth/getTableauAuthInfo.js';
@@ -90,7 +91,11 @@ export async function startExpressServer({
     }),
   );
 
-  const middleware: Array<RequestHandler> = [handlePingRequest];
+  // Identity-gateway middleware runs before the OAuth middleware: it
+  // promotes X-Forwarded-Authorization, and (when configured) verifies the
+  // gateway identity JWT to authenticate portal-originated requests without
+  // a bearer token. Pure pass-through when no gateway env is configured.
+  const middleware: Array<RequestHandler> = [handlePingRequest, identityGatewayMiddleware()];
   if (config.enablePassthroughAuth) {
     middleware.push(passthroughAuthMiddleware());
   }
