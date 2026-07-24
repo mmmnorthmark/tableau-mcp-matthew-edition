@@ -80,9 +80,9 @@ describe('clientIdMetadataDocuments', () => {
   beforeAll(setEnv);
   afterAll(resetEnv);
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
-    clientMetadataCache.clear();
+    await clientMetadataCache.clear();
     _server = undefined;
   });
 
@@ -149,7 +149,7 @@ describe('clientIdMetadataDocuments', () => {
   it('should cache CIMD URL responses', async () => {
     const { app } = await startServer();
 
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
     mockAxios.get.mockResolvedValue(mocks.MOCK_AXIOS_GET_RESPONSE);
 
     mocks.dnsResolver.mockReturnValue({ resolve4: () => ['1.2.3.4'] });
@@ -165,11 +165,11 @@ describe('clientIdMetadataDocuments', () => {
     });
 
     expect(response.status).toBe(302);
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
     vi.advanceTimersByTime(3600000 - 1);
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
     vi.advanceTimersByTime(1);
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
   });
 
   it('should support CIMD URLs with IPV6 addresses', async () => {
@@ -202,7 +202,7 @@ describe('clientIdMetadataDocuments', () => {
   it('should cache CIMD URL responses respecting the cache-control header', async () => {
     const { app } = await startServer();
 
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
 
     mockAxios.get.mockResolvedValue({
       ...mocks.MOCK_AXIOS_GET_RESPONSE,
@@ -222,17 +222,17 @@ describe('clientIdMetadataDocuments', () => {
     });
 
     expect(response.status).toBe(302);
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
     vi.advanceTimersByTime(4800000 - 1);
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
     vi.advanceTimersByTime(1);
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
   });
 
   it('should limit the cache duration to one day', async () => {
     const { app } = await startServer();
 
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
 
     mockAxios.get.mockResolvedValue({
       ...mocks.MOCK_AXIOS_GET_RESPONSE,
@@ -255,11 +255,11 @@ describe('clientIdMetadataDocuments', () => {
     });
 
     expect(response.status).toBe(302);
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
     vi.advanceTimersByTime(milliseconds.fromDays(1) - 1);
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeDefined();
     vi.advanceTimersByTime(1);
-    expect(clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
+    expect(await clientMetadataCache.get(constants.FAKE_CLIENT_METADATA_URL)).toBeUndefined();
   });
 
   it('should reject authorize requests if IP address cannot be resolved', async () => {

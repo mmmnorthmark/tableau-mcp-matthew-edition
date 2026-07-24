@@ -16,6 +16,12 @@ import { authorize } from './authorize.js';
 import { callback } from './callback.js';
 import { register } from './register.js';
 import { revoke } from './revoke.js';
+import {
+  createOAuthStore,
+  getCodesCollection,
+  getTokensCollection,
+  OAuthStore,
+} from './stores/oauthStore.js';
 import { token } from './token.js';
 import { AuthorizationCode, PendingAuthorization, RefreshTokenData } from './types.js';
 
@@ -48,12 +54,12 @@ abstract class OAuthProvider {
  *
  */
 export class EmbeddedOAuthProvider extends OAuthProvider {
-  private readonly pendingAuthorizations = new Map<string, PendingAuthorization>();
-  private readonly authorizationCodes = new Map<string, AuthorizationCode>();
-  private readonly refreshTokens = new Map<string, RefreshTokenData>();
+  private readonly pendingAuthorizations: OAuthStore<PendingAuthorization>;
+  private readonly authorizationCodes: OAuthStore<AuthorizationCode>;
+  private readonly refreshTokens: OAuthStore<RefreshTokenData>;
   // Secondary index for O(1) revocation: Tableau access token -> MCP refresh token ID.
-  // Expiry-timeout entries may become stale but are harmless and self-clean on next revoke.
-  private readonly refreshTokenIndex = new Map<string, string>();
+  // Expired entries may become stale but are harmless and self-clean via TTL.
+  private readonly refreshTokenIndex: OAuthStore<string>;
 
   private readonly privateKey: KeyObject;
   private readonly publicKey: KeyObject;
@@ -63,6 +69,28 @@ export class EmbeddedOAuthProvider extends OAuthProvider {
 
     this.privateKey = this.getPrivateKey();
     this.publicKey = createPublicKey(this.privateKey);
+
+    const { authzCodeTimeoutMs, refreshTokenTimeoutMs } = this.config.oauth;
+    this.pendingAuthorizations = createOAuthStore({
+      namespace: 'pending-authorizations',
+      collection: getCodesCollection(),
+      defaultTtlMs: authzCodeTimeoutMs,
+    });
+    this.authorizationCodes = createOAuthStore({
+      namespace: 'authorization-codes',
+      collection: getCodesCollection(),
+      defaultTtlMs: authzCodeTimeoutMs,
+    });
+    this.refreshTokens = createOAuthStore({
+      namespace: 'refresh-tokens',
+      collection: getTokensCollection(),
+      defaultTtlMs: refreshTokenTimeoutMs,
+    });
+    this.refreshTokenIndex = createOAuthStore({
+      namespace: 'refresh-token-index',
+      collection: getTokensCollection(),
+      defaultTtlMs: refreshTokenTimeoutMs,
+    });
   }
 
   get accessTokenValidator(): AccessTokenValidator {

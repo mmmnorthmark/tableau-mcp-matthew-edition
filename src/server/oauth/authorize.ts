@@ -11,8 +11,7 @@ import { axios, AxiosResponse, getStringResponseHeader, isAxiosError } from '../
 import { milliseconds } from '../../utils/milliseconds.js';
 import { parseUrl } from '../../utils/parseUrl.js';
 import { retry } from '../../utils/retry.js';
-import { setLongTimeout } from '../../utils/setLongTimeout.js';
-import { clientMetadataCache } from './clientMetadataCache.js';
+import { CLIENT_METADATA_DEFAULT_TTL_MS, clientMetadataCache } from './clientMetadataCache.js';
 import { getDnsResolver } from './dnsResolver.js';
 import { generateCodeChallenge } from './generateCodeChallenge.js';
 import { isValidRedirectUri } from './isValidRedirectUri.js';
@@ -20,6 +19,7 @@ import { matchesRegisteredRedirectUri } from './matchesRegisteredRedirectUri.js'
 import { TABLEAU_CLOUD_SERVER_URL } from './provider.js';
 import { cimdMetadataSchema, ClientMetadata, mcpAuthorizeSchema } from './schemas.js';
 import { getSupportedScopes, parseScopes, validateScopes } from './scopes.js';
+import { OAuthStore } from './stores/oauthStore.js';
 import { PendingAuthorization } from './types.js';
 
 /**
@@ -31,7 +31,7 @@ import { PendingAuthorization } from './types.js';
  */
 export function authorize(
   app: express.Application,
-  pendingAuthorizations: Map<string, PendingAuthorization>,
+  pendingAuthorizations: OAuthStore<PendingAuthorization>,
 ): void {
   const config = getConfig();
 
@@ -144,7 +144,8 @@ export function authorize(
     const numCodeVerifierBytes = randomInt(22, 65);
     const tableauCodeVerifier = randomBytes(numCodeVerifierBytes).toString('hex');
     const tableauCodeChallenge = generateCodeChallenge(tableauCodeVerifier);
-    pendingAuthorizations.set(authKey, {
+    // Expires after authzCodeTimeoutMs via the store's default TTL
+    await pendingAuthorizations.set(authKey, {
       clientId: client_id,
       redirectUri: redirect_uri,
       codeChallenge: code_challenge,
@@ -154,9 +155,6 @@ export function authorize(
       tableauCodeVerifier,
       scopes: scopesToGrant,
     });
-
-    // Clean up expired authorizations
-    setLongTimeout(() => pendingAuthorizations.delete(authKey), config.oauth.authzCodeTimeoutMs);
 
     // Redirect to Tableau OAuth
     const server = config.server || TABLEAU_CLOUD_SERVER_URL;
@@ -227,7 +225,7 @@ async function getClientFromMetadataDoc(
   clientMetadataUrl: URL,
 ): Promise<Result<ClientMetadata, { error: string; error_description: string }>> {
   const originalUrl = clientMetadataUrl.toString();
-  const cache = clientMetadataCache.get(originalUrl);
+  const cache = await clientMetadataCache.get(originalUrl);
   if (cache) {
     return Ok(cache);
   }
@@ -363,7 +361,7 @@ async function getClientFromMetadataDoc(
     }
   }
 
-  let cacheExpiryMs = clientMetadataCache.defaultExpirationTimeMs;
+  let cacheExpiryMs = CLIENT_METADATA_DEFAULT_TTL_MS;
   if (cacheControlMaxAge) {
     const cacheControlMaxAgeSeconds = parseInt(cacheControlMaxAge);
     if (!isNaN(cacheControlMaxAgeSeconds) && cacheControlMaxAgeSeconds >= 0) {
@@ -375,7 +373,7 @@ async function getClientFromMetadataDoc(
   }
 
   if (cacheExpiryMs > 0) {
-    clientMetadataCache.set(originalUrl, clientMetadataResult.data, cacheExpiryMs);
+    await clientMetadataCache.set(originalUrl, clientMetadataResult.data, cacheExpiryMs);
   }
 
   return Ok(clientMetadataResult.data);

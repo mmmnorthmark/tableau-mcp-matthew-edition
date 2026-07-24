@@ -6,6 +6,7 @@ import { fromError } from 'zod-validation-error/v3';
 
 import { log } from '../../logging/logger.js';
 import { mcpAccessTokenSchema, mcpAccessTokenUserOnlySchema } from './schemas.js';
+import { OAuthStore } from './stores/oauthStore.js';
 import { RefreshTokenData } from './types.js';
 
 /**
@@ -39,9 +40,9 @@ const revokeSchema = z.object({
  */
 export function revoke(
   app: express.Application,
-  refreshTokens: Map<string, RefreshTokenData>,
+  refreshTokens: OAuthStore<RefreshTokenData>,
   privateKey: KeyObject,
-  refreshTokenIndex: Map<string, string>,
+  refreshTokenIndex: OAuthStore<string>,
 ): void {
   app.post('/oauth2/revoke', async (req, res) => {
     const result = revokeSchema.safeParse(req.body);
@@ -58,11 +59,11 @@ export function revoke(
 
     if (token_type_hint === 'access_token') {
       await tryRevokeAccessToken(token, privateKey, refreshTokens, refreshTokenIndex);
-      tryRevokeRefreshToken(token, refreshTokens, refreshTokenIndex);
+      await tryRevokeRefreshToken(token, refreshTokens, refreshTokenIndex);
     } else {
-      // hint=refresh_token or no hint: try refresh token first (O(1) Map lookup),
+      // hint=refresh_token or no hint: try refresh token first (O(1) store lookup),
       // then fall through to JWE decryption
-      const revokedAsRefresh = tryRevokeRefreshToken(token, refreshTokens, refreshTokenIndex);
+      const revokedAsRefresh = await tryRevokeRefreshToken(token, refreshTokens, refreshTokenIndex);
       if (!revokedAsRefresh) {
         await tryRevokeAccessToken(token, privateKey, refreshTokens, refreshTokenIndex);
       }
@@ -74,19 +75,19 @@ export function revoke(
 }
 
 /**
- * Attempts to revoke a refresh token by removing it from the in-memory Map.
+ * Attempts to revoke a refresh token by removing it from the store.
  * Also removes the corresponding entry from the secondary index.
  * Returns true if the token was found and deleted.
  */
-function tryRevokeRefreshToken(
+async function tryRevokeRefreshToken(
   token: string,
-  refreshTokens: Map<string, RefreshTokenData>,
-  refreshTokenIndex: Map<string, string>,
-): boolean {
-  const data = refreshTokens.get(token);
+  refreshTokens: OAuthStore<RefreshTokenData>,
+  refreshTokenIndex: OAuthStore<string>,
+): Promise<boolean> {
+  const data = await refreshTokens.get(token);
   if (!data) return false;
-  refreshTokenIndex.delete(data.tokens.accessToken);
-  refreshTokens.delete(token);
+  await refreshTokenIndex.delete(data.tokens.accessToken);
+  await refreshTokens.delete(token);
   return true;
 }
 
@@ -105,8 +106,8 @@ function tryRevokeRefreshToken(
 async function tryRevokeAccessToken(
   token: string,
   privateKey: KeyObject,
-  refreshTokens: Map<string, RefreshTokenData>,
-  refreshTokenIndex: Map<string, string>,
+  refreshTokens: OAuthStore<RefreshTokenData>,
+  refreshTokenIndex: OAuthStore<string>,
 ): Promise<void> {
   let tableauAccessToken: string | undefined;
   let tableauServer: string | undefined;
@@ -136,10 +137,10 @@ async function tryRevokeAccessToken(
 
   // Delete any refresh token associated with the same Tableau session (O(1) via index)
   if (tableauAccessToken) {
-    const refreshTokenId = refreshTokenIndex.get(tableauAccessToken);
+    const refreshTokenId = await refreshTokenIndex.get(tableauAccessToken);
     if (refreshTokenId) {
-      refreshTokens.delete(refreshTokenId);
-      refreshTokenIndex.delete(tableauAccessToken);
+      await refreshTokens.delete(refreshTokenId);
+      await refreshTokenIndex.delete(tableauAccessToken);
     }
 
     // Best-effort signout of the upstream Tableau session
