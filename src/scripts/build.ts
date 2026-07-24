@@ -36,8 +36,10 @@ const globalValues: Record<GlobalIdentifierName, string> = {
     format: 'cjs',
     minify: !dev,
     packages: dev ? 'external' : 'bundle',
-    // vega/canvas have native dependencies that can't be bundled
-    external: ['vega', 'vega-lite', 'canvas'],
+    // vega/canvas have native dependencies that can't be bundled;
+    // keyv-firestore pulls in @google-cloud/firestore (grpc) and is only
+    // loaded via dynamic import when STORAGE_BACKEND=firestore
+    external: ['vega', 'vega-lite', 'canvas', 'keyv-firestore'],
     sourcemap: true,
     logLevel: dev ? 'debug' : 'info',
     logOverride: {

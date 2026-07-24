@@ -74,6 +74,8 @@
     "express": "^5.1.0",
     "fast-levenshtein": "^3.0.0",
     "jose": "^6.0.12",
+    "keyv": "^5.6.0",
+    "keyv-firestore": "^2.1.0",
     "ssrfcheck": "^1.2.0",
     "ts-results-es": "^7.1.0",
     "vega": "^6.2.0",
