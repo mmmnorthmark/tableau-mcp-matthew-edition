@@ -1,3 +1,5 @@
+import { ListPromptsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+
 import { getConfig } from '../config.js';
 import { WebMcpServer } from '../server.web.js';
 import { getExtractOptimizationApplyPrompt } from './extractOptimization/apply.js';
@@ -19,6 +21,7 @@ const webPromptFactories: ReadonlyArray<WebPromptFactory> = [
 
 export const registerPrompts = (server: WebMcpServer): void => {
   const config = getConfig();
+  let registeredCount = 0;
   for (const factory of webPromptFactories) {
     const prompt = factory(server);
     if (prompt.disabled(config)) {
@@ -37,5 +40,15 @@ export const registerPrompts = (server: WebMcpServer): void => {
 
       prompt.callback as any,
     );
+    registeredCount++;
+  }
+
+  // The server statically advertises the `prompts` capability, but the SDK only wires the
+  // prompts/list handler once at least one prompt is registered. When every prompt is disabled
+  // by config, clients that honor the advertised capability (e.g. the Cloudflare MCP portal's
+  // capability sync) would get "Method not found" and treat the server as broken — so install
+  // an empty-list handler explicitly.
+  if (registeredCount === 0) {
+    server.mcpServer.server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts: [] }));
   }
 };
