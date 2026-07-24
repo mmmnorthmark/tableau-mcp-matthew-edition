@@ -11,6 +11,12 @@ import { googleAuthorize } from '../google/authorize.js';
 import { googleCallback } from '../google/callback.js';
 import { googleToken } from '../google/token.js';
 import { register } from '../register.js';
+import {
+  createOAuthStore,
+  getCodesCollection,
+  getTokensCollection,
+  OAuthStore,
+} from '../stores/oauthStore.js';
 import { IOAuthProvider } from './index.js';
 
 // Re-export for use in Google OAuth modules
@@ -58,9 +64,9 @@ export type GoogleRefreshTokenData = {
 export class GoogleOAuthProvider implements IOAuthProvider {
   private readonly config = getConfig();
 
-  private readonly pendingAuthorizations = new Map<string, GooglePendingAuthorization>();
-  private readonly authorizationCodes = new Map<string, GoogleAuthorizationCode>();
-  private readonly refreshTokens = new Map<string, GoogleRefreshTokenData>();
+  private readonly pendingAuthorizations: OAuthStore<GooglePendingAuthorization>;
+  private readonly authorizationCodes: OAuthStore<GoogleAuthorizationCode>;
+  private readonly refreshTokens: OAuthStore<GoogleRefreshTokenData>;
 
   private readonly privateKey: KeyObject;
   private readonly publicKey: KeyObject;
@@ -68,6 +74,23 @@ export class GoogleOAuthProvider implements IOAuthProvider {
   constructor() {
     this.privateKey = this.getPrivateKey();
     this.publicKey = createPublicKey(this.privateKey);
+
+    const { authzCodeTimeoutMs, refreshTokenTimeoutMs } = this.config.oauth;
+    this.pendingAuthorizations = createOAuthStore({
+      namespace: 'google-pending-authorizations',
+      collection: getCodesCollection(),
+      defaultTtlMs: authzCodeTimeoutMs,
+    });
+    this.authorizationCodes = createOAuthStore({
+      namespace: 'google-authorization-codes',
+      collection: getCodesCollection(),
+      defaultTtlMs: authzCodeTimeoutMs,
+    });
+    this.refreshTokens = createOAuthStore({
+      namespace: 'google-refresh-tokens',
+      collection: getTokensCollection(),
+      defaultTtlMs: refreshTokenTimeoutMs,
+    });
   }
 
   get authMiddleware(): RequestHandler {

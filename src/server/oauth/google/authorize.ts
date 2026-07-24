@@ -3,11 +3,11 @@ import express from 'express';
 import { fromError } from 'zod-validation-error';
 
 import { getConfig } from '../../../config.js';
-import { setLongTimeout } from '../../../utils/setLongTimeout.js';
 import { generateCodeChallenge } from '../generateCodeChallenge.js';
 import { isValidRedirectUri } from '../isValidRedirectUri.js';
 import { GooglePendingAuthorization } from '../providers/GoogleOAuthProvider.js';
 import { mcpAuthorizeSchema } from '../schemas.js';
+import { OAuthStore } from '../stores/oauthStore.js';
 
 /**
  * Google OAuth 2.1 Authorization Endpoint
@@ -18,7 +18,7 @@ import { mcpAuthorizeSchema } from '../schemas.js';
  */
 export function googleAuthorize(
   app: express.Application,
-  pendingAuthorizations: Map<string, GooglePendingAuthorization>,
+  pendingAuthorizations: OAuthStore<GooglePendingAuthorization>,
 ): void {
   const config = getConfig();
 
@@ -68,7 +68,8 @@ export function googleAuthorize(
     const numCodeVerifierBytes = Math.floor(Math.random() * (64 - 22 + 1)) + 22;
     const googleCodeVerifier = randomBytes(numCodeVerifierBytes).toString('hex');
 
-    pendingAuthorizations.set(authKey, {
+    // Expires after authzCodeTimeoutMs via the store's default TTL
+    await pendingAuthorizations.set(authKey, {
       clientId: client_id,
       redirectUri: redirect_uri,
       codeChallenge: code_challenge,
@@ -76,9 +77,6 @@ export function googleAuthorize(
       googleState,
       googleCodeVerifier,
     });
-
-    // Clean up expired authorizations
-    setLongTimeout(() => pendingAuthorizations.delete(authKey), config.oauth.authzCodeTimeoutMs);
 
     // Redirect to Google OAuth
     const googleClientId = config.oauth.googleClientId;

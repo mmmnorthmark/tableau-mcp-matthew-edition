@@ -11,6 +11,7 @@ import {
   GoogleUser,
 } from '../providers/GoogleOAuthProvider.js';
 import { callbackSchema } from '../schemas.js';
+import { OAuthStore } from '../stores/oauthStore.js';
 
 /**
  * Google OAuth Callback Handler
@@ -21,8 +22,8 @@ import { callbackSchema } from '../schemas.js';
  */
 export function googleCallback(
   app: express.Application,
-  pendingAuthorizations: Map<string, GooglePendingAuthorization>,
-  authorizationCodes: Map<string, GoogleAuthorizationCode>,
+  pendingAuthorizations: OAuthStore<GooglePendingAuthorization>,
+  authorizationCodes: OAuthStore<GoogleAuthorizationCode>,
 ): void {
   const config = getConfig();
 
@@ -50,7 +51,7 @@ export function googleCallback(
     try {
       // Parse state to get auth key and Google state
       const [authKey, googleState] = state?.split(':') ?? [];
-      const pendingAuth = pendingAuthorizations.get(authKey);
+      const pendingAuth = await pendingAuthorizations.get(authKey);
 
       if (!pendingAuth || pendingAuth.googleState !== googleState) {
         res.status(400).json({
@@ -104,7 +105,7 @@ export function googleCallback(
 
       // Generate authorization code
       const authorizationCode = randomBytes(32).toString('hex');
-      authorizationCodes.set(authorizationCode, {
+      await authorizationCodes.set(authorizationCode, {
         clientId: pendingAuth.clientId,
         redirectUri: pendingAuth.redirectUri,
         codeChallenge: pendingAuth.codeChallenge,
@@ -113,7 +114,7 @@ export function googleCallback(
       });
 
       // Clean up
-      pendingAuthorizations.delete(authKey);
+      await pendingAuthorizations.delete(authKey);
 
       // Redirect back to client with authorization code
       const redirectUrl = new URL(pendingAuth.redirectUri);

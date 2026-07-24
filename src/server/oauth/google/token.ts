@@ -4,7 +4,6 @@ import { CompactEncrypt } from 'jose';
 import { fromError } from 'zod-validation-error';
 
 import { getConfig } from '../../../config.js';
-import { setLongTimeout } from '../../../utils/setLongTimeout.js';
 import { generateCodeChallenge } from '../generateCodeChallenge.js';
 import {
   AUDIENCE,
@@ -13,6 +12,7 @@ import {
   GoogleUser,
 } from '../providers/GoogleOAuthProvider.js';
 import { mcpTokenSchema } from '../schemas.js';
+import { OAuthStore } from '../stores/oauthStore.js';
 
 /**
  * Google OAuth 2.1 Token Endpoint
@@ -26,8 +26,8 @@ import { mcpTokenSchema } from '../schemas.js';
  */
 export function googleToken(
   app: express.Application,
-  authorizationCodes: Map<string, GoogleAuthorizationCode>,
-  refreshTokens: Map<string, GoogleRefreshTokenData>,
+  authorizationCodes: OAuthStore<GoogleAuthorizationCode>,
+  refreshTokens: OAuthStore<GoogleRefreshTokenData>,
   publicKey: KeyObject,
 ): void {
   const config = getConfig();
@@ -58,10 +58,10 @@ export function googleToken(
         case 'authorization_code': {
           // Handle authorization code exchange
           const { code, codeVerifier } = result.data;
-          const authCode = authorizationCodes.get(code);
+          const authCode = await authorizationCodes.get(code);
 
           if (!authCode || authCode.expiresAt < Math.floor(Date.now() / 1000)) {
-            authorizationCodes.delete(code);
+            await authorizationCodes.delete(code);
             res.status(400).json({
               error: 'invalid_grant',
               error_description: 'Invalid or expired authorization code',
@@ -87,18 +87,14 @@ export function googleToken(
             publicKey,
           );
 
-          refreshTokens.set(refreshTokenId, {
+          // Expires after refreshTokenTimeoutMs via the store's default TTL
+          await refreshTokens.set(refreshTokenId, {
             user: authCode.user,
             clientId: authCode.clientId,
             expiresAt: Math.floor((Date.now() + config.oauth.refreshTokenTimeoutMs) / 1000),
           });
 
-          setLongTimeout(
-            () => refreshTokens.delete(refreshTokenId),
-            config.oauth.refreshTokenTimeoutMs,
-          );
-
-          authorizationCodes.delete(code);
+          await authorizationCodes.delete(code);
 
           res.json({
             access_token: accessToken,
@@ -112,10 +108,10 @@ export function googleToken(
         case 'refresh_token': {
           // Handle refresh token
           const { refreshToken } = result.data;
-          const tokenData = refreshTokens.get(refreshToken);
+          const tokenData = await refreshTokens.get(refreshToken);
 
           if (!tokenData || tokenData.expiresAt < Math.floor(Date.now() / 1000)) {
-            refreshTokens.delete(refreshToken);
+            await refreshTokens.delete(refreshToken);
             res.status(400).json({
               error: 'invalid_grant',
               error_description: 'Invalid or expired refresh token',
@@ -131,19 +127,15 @@ export function googleToken(
           );
 
           // Rotate the refresh token
-          refreshTokens.delete(refreshToken);
+          await refreshTokens.delete(refreshToken);
           const newRefreshTokenId = randomBytes(32).toString('hex');
 
-          refreshTokens.set(newRefreshTokenId, {
+          // Expires after refreshTokenTimeoutMs via the store's default TTL
+          await refreshTokens.set(newRefreshTokenId, {
             user: tokenData.user,
             clientId: tokenData.clientId,
             expiresAt: Math.floor((Date.now() + config.oauth.refreshTokenTimeoutMs) / 1000),
           });
-
-          setLongTimeout(
-            () => refreshTokens.delete(newRefreshTokenId),
-            config.oauth.refreshTokenTimeoutMs,
-          );
 
           res.json({
             access_token: accessToken,
