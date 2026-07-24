@@ -679,6 +679,60 @@ const envVars = {
     required: false,
     sensitive: false,
   },
+  STORAGE_BACKEND: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Storage Backend',
+    description:
+      'Backend for persistent OAuth server state. Possible values are `memory` (default) or `firestore`.',
+    required: false,
+    sensitive: false,
+  },
+  FIRESTORE_PROJECT_ID: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Firestore Project ID',
+    description:
+      'Google Cloud project ID for the Firestore database used when STORAGE_BACKEND is firestore. Defaults to GOOGLE_CLOUD_PROJECT.',
+    required: false,
+    sensitive: false,
+  },
+  GOOGLE_CLOUD_PROJECT: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'Google Cloud Project',
+    description:
+      'Google Cloud project ID, typically provided by the Cloud Run runtime. Used as the fallback for FIRESTORE_PROJECT_ID.',
+    required: false,
+    sensitive: false,
+  },
+  OAUTH_CLIENTS_COLLECTION: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'OAuth Clients Collection',
+    description:
+      'Firestore collection for OAuth client metadata when STORAGE_BACKEND is firestore. Defaults to `tableau-matthewmillertableau-oauth-clients`.',
+    required: false,
+    sensitive: false,
+  },
+  OAUTH_CODES_COLLECTION: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'OAuth Codes Collection',
+    description:
+      'Firestore collection for OAuth pending authorizations and authorization codes when STORAGE_BACKEND is firestore. Defaults to `tableau-matthewmillertableau-oauth-codes`.',
+    required: false,
+    sensitive: false,
+  },
+  OAUTH_TOKENS_COLLECTION: {
+    includeInUserConfig: false,
+    type: 'string',
+    title: 'OAuth Tokens Collection',
+    description:
+      'Firestore collection for OAuth refresh tokens when STORAGE_BACKEND is firestore. Defaults to `tableau-matthewmillertableau-oauth-tokens`.',
+    required: false,
+    sensitive: false,
+  },
   PRODUCT_TELEMETRY_ENABLED: {
     includeInUserConfig: true,
     type: 'boolean',

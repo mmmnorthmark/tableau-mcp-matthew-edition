@@ -78,6 +78,12 @@ export interface ProcessEnvWeb extends ProcessEnvBase {
   OAUTH_AUTHORIZATION_CODE_TIMEOUT_MS: string | undefined;
   OAUTH_ACCESS_TOKEN_TIMEOUT_MS: string | undefined;
   OAUTH_REFRESH_TOKEN_TIMEOUT_MS: string | undefined;
+  STORAGE_BACKEND: string | undefined;
+  FIRESTORE_PROJECT_ID: string | undefined;
+  GOOGLE_CLOUD_PROJECT: string | undefined;
+  OAUTH_CLIENTS_COLLECTION: string | undefined;
+  OAUTH_CODES_COLLECTION: string | undefined;
+  OAUTH_TOKENS_COLLECTION: string | undefined;
   LATENCY_METRIC_NAME: string | undefined;
   TELEMETRY_PROVIDER: string | undefined;
   TELEMETRY_PROVIDER_CONFIG: string | undefined;
